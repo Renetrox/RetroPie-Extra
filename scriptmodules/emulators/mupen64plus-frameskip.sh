@@ -42,6 +42,17 @@ function _stock_data_mupen64plus-frameskip() {
     fi
 }
 
+function _frameskip_video_supported_mupen64plus-frameskip() {
+    # Keep the very old RPi1/2 path conservative for now. RetroPie treats
+    # Zero 2 W as rpi3, so rpi3 covers both Pi 3 and Zero 2 W.
+    if isPlatform "rpi"; then
+        isPlatform "rpi3" || isPlatform "rpi4" || isPlatform "rpi5"
+        return
+    fi
+
+    isPlatform "gl" || isPlatform "gles"
+}
+
 function _get_repos_mupen64plus-frameskip() {
     local repos=(
         'mupen64plus mupen64plus-core master'
@@ -53,20 +64,20 @@ function _get_repos_mupen64plus-frameskip() {
     if isPlatform "videocore" && isPlatform "32bit"; then
         repos+=('gizmo98 mupen64plus-audio-omx master')
     fi
-    if isPlatform "gles"; then
-        ! isPlatform "rpi" && repos+=('mupen64plus mupen64plus-video-glide64mk2 master')
-        ! isPlatform "rpi" && repos+=('mupen64plus mupen64plus-video-rice master')
-        if isPlatform "32bit"; then
-            repos+=('ricrpi mupen64plus-video-gles2rice pandora-backport')
-            repos+=('ricrpi mupen64plus-video-gles2n64 master')
-        fi
-    fi
+
+    # This module only needs the current Glide64mk2 and Rice plugins. The old
+    # gles2rice/gles2n64 forks are intentionally not included.
     if isPlatform "gl"; then
         repos+=(
             'mupen64plus mupen64plus-video-glide64mk2 master'
             'mupen64plus mupen64plus-video-rice master'
             'mupen64plus mupen64plus-rsp-cxd4 master'
             'mupen64plus mupen64plus-rsp-z64 master'
+        )
+    elif isPlatform "gles" && _frameskip_video_supported_mupen64plus-frameskip; then
+        repos+=(
+            'mupen64plus mupen64plus-video-glide64mk2 master'
+            'mupen64plus mupen64plus-video-rice master'
         )
     fi
  
@@ -173,13 +184,13 @@ function _params_mupen64plus-frameskip() {
 
     isPlatform "rpi1" && params+=("VFP=1" "VFP_HARD=1")
 
-    # OMX is only relevant on VideoCore / the OMX audio plugin.
+    # Legacy VideoCore builds select the Raspberry Pi EGL/GLES libraries.
     if isPlatform "videocore" || [[ "$dir" == "mupen64plus-audio-omx" ]]; then
         params+=("VC=1")
     fi
 
-    # Keep the original GLES behaviour used by this custom module.
-    if isPlatform "mesa" || isPlatform "mali" || isPlatform "armbian"; then
+    # Current Raspberry Pi, Mesa, Mali and Armbian paths use GLES.
+    if isPlatform "gles" || isPlatform "mesa" || isPlatform "mali" || isPlatform "armbian"; then
         params+=("USE_GLES=1")
     fi
 
@@ -190,8 +201,7 @@ function _params_mupen64plus-frameskip() {
     isPlatform "armv7" && params+=("HOST_CPU=armv7")
     isPlatform "aarch64" && params+=("HOST_CPU=aarch64")
 
-    # Build Glide64mk2 with its legacy frameskipper regardless of the frontend
-    # platform. Other Mupen64Plus components do not need this make option.
+    # Build Glide64mk2 with its legacy frameskipper on every supported target.
     [[ "$dir" == "mupen64plus-video-glide64mk2" ]] && params+=("USE_FRAMESKIPPER=1")
 
     echo "${params[@]}"
@@ -241,15 +251,6 @@ function build_mupen64plus-frameskip() {
         md_ret_require+=('mupen64plus-audio-omx/projects/unix/mupen64plus-audio-omx.so')
     fi
 
-    if isPlatform "gles"; then
-        ! isPlatform "rpi" && md_ret_require+=('mupen64plus-video-glide64mk2/projects/unix/mupen64plus-video-glide64mk2.so')
-        ! isPlatform "rpi" && md_ret_require+=('mupen64plus-video-rice/projects/unix/mupen64plus-video-rice.so')
-        if isPlatform "32bit"; then
-            md_ret_require+=('mupen64plus-video-gles2rice/projects/unix/mupen64plus-video-rice.so')
-            md_ret_require+=('mupen64plus-video-gles2n64/projects/unix/mupen64plus-video-n64.so')
-        fi
-    fi
-
     if isPlatform "gl"; then
         md_ret_require+=(
             'mupen64plus-video-glide64mk2/projects/unix/mupen64plus-video-glide64mk2.so'
@@ -261,6 +262,11 @@ function build_mupen64plus-frameskip() {
         else
             md_ret_require+=('mupen64plus-rsp-cxd4/projects/unix/mupen64plus-rsp-cxd4.so')
         fi
+    elif isPlatform "gles" && _frameskip_video_supported_mupen64plus-frameskip; then
+        md_ret_require+=(
+            'mupen64plus-video-glide64mk2/projects/unix/mupen64plus-video-glide64mk2.so'
+            'mupen64plus-video-rice/projects/unix/mupen64plus-video-rice.so'
+        )
     fi
 }
 
@@ -286,7 +292,7 @@ function install_mupen64plus-frameskip() {
 function configure_mupen64plus-frameskip() {
     # This module only adds the selectable frameskip variants. It deliberately
     # leaves RetroPie's normal Mupen64Plus emulator entries untouched.
-    if ! isPlatform "rpi"; then
+    if _frameskip_video_supported_mupen64plus-frameskip; then
         addEmulator 0 "${md_id}-glide64mk2-noframeskip" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-glide64mk2 %ROM% 0 0 --set Video-Glide64mk2[autoframeskip]\=False --set Video-Glide64mk2[maxframeskip]\=0"
         local fs
         for fs in 1 2 3 4 5; do
@@ -371,10 +377,6 @@ function configure_mupen64plus-frameskip() {
         iniSet "EnableInaccurateTextureCoordinates" "True"
  
         if isPlatform "videocore"; then
-            # Disable gles2n64 autores feature and use dispmanx upscaling
-            iniConfig "=" "" "$md_conf_root/n64/gles2n64.conf"
-            iniSet "auto resolution" "0"
- 
             setAutoConf mupen64plus_audio 1
             setAutoConf mupen64plus_compatibility_check 1
         elif isPlatform "mesa"; then
