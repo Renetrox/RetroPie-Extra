@@ -190,10 +190,9 @@ function _params_mupen64plus-frameskip() {
     isPlatform "armv7" && params+=("HOST_CPU=armv7")
     isPlatform "aarch64" && params+=("HOST_CPU=aarch64")
 
-    # Custom feature: build the legacy frameskipper where supported.
-    if isPlatform "x11" || isPlatform "armbian"; then
-        params+=("USE_FRAMESKIPPER=1")
-    fi
+    # Build Glide64mk2 with its legacy frameskipper regardless of the frontend
+    # platform. Other Mupen64Plus components do not need this make option.
+    [[ "$dir" == "mupen64plus-video-glide64mk2" ]] && params+=("USE_FRAMESKIPPER=1")
 
     echo "${params[@]}"
 }
@@ -285,60 +284,17 @@ function install_mupen64plus-frameskip() {
 }
 
 function configure_mupen64plus-frameskip() {
-    local res
-    local resolutions=("320x240" "640x480")
-    isPlatform "kms" && res="%XRES%x%YRES%"
- 
-    if isPlatform "rpi"; then
-        # kms needs to run at full screen as it doesn't benefit from our SDL scaling hint
-        if isPlatform "mesa"; then
-            addEmulator 0 "${md_id}-GLideN64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-GLideN64 %ROM% $res 0 --set Video-GLideN64[UseNativeResolutionFactor]\=1"
-            addEmulator 0 "${md_id}-GLideN64-highres" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-GLideN64 %ROM% $res 0 --set Video-GLideN64[UseNativeResolutionFactor]\=2"
-            addEmulator 0 "${md_id}-gles2n64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-n64 %ROM%"
-            if isPlatform "32bit"; then
-                addEmulator 0 "${md_id}-gles2rice" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM% $res"
-            fi
-        else
-            for res in "${resolutions[@]}"; do
-                local name=""
-                local nativeResFactor=1
-                if [[ "$res" == "640x480" ]]; then
-                    name="-highres"
-                    nativeResFactor=2
-                fi
-                addEmulator 0 "${md_id}-GLideN64$name" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-GLideN64 %ROM% $res 0 --set Video-GLideN64[UseNativeResolutionFactor]\=$nativeResFactor"
-                addEmulator 0 "${md_id}-gles2rice$name" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM% $res"
-            done
-            addEmulator 0 "${md_id}-auto" "n64" "$md_inst/bin/mupen64plus.sh AUTO %ROM%"
-        fi
-        addEmulator 0 "${md_id}-gles2n64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-n64 %ROM%"
-    elif isPlatform "mali"; then
-        addEmulator 0 "${md_id}-gles2n64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-n64 %ROM%"
-        addEmulator 0 "${md_id}-GLideN64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-GLideN64 %ROM%"
-        addEmulator 0 "${md_id}-glide64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-glide64mk2 %ROM%"
-        addEmulator 0 "${md_id}-gles2rice" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM%"
-        addEmulator 0 "${md_id}-auto" "n64" "$md_inst/bin/mupen64plus.sh AUTO %ROM%"
-    else
-        addEmulator 0 "${md_id}-GLideN64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-GLideN64 %ROM% $res"
-        addEmulator 0 "${md_id}-glide64" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-glide64mk2 %ROM% $res"
-        addEmulator 0 "${md_id}-rice" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM% $res"
-        if isPlatform "x86"; then
-            ! isPlatform "kms" && res="640x480"
-            addEmulator 0 "${md_id}-GLideN64-LLE" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-GLideN64 %ROM% $res mupen64plus-rsp-cxd4-sse2"
-        fi
-    fi
-
-    # Custom frameskip launchers. They are added with default=0 so this module
-    # never changes the emulator selected by the user in Runcommand.
+    # This module only adds the selectable frameskip variants. It deliberately
+    # leaves RetroPie's normal Mupen64Plus emulator entries untouched.
     if ! isPlatform "rpi"; then
-        addEmulator 0 "${md_id}-glide64mk2-noframeskip" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-glide64mk2 %ROM% 1920x1080 0 --set Video-Glide64mk2[autoframeskip]\=False --set Video-Glide64mk2[maxframeskip]\=0"
+        addEmulator 0 "${md_id}-glide64mk2-noframeskip" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-glide64mk2 %ROM% 0 0 --set Video-Glide64mk2[autoframeskip]\=False --set Video-Glide64mk2[maxframeskip]\=0"
         local fs
         for fs in 1 2 3 4 5; do
-            addEmulator 0 "${md_id}-glide64mk2-frameskip-${fs}" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-glide64mk2 %ROM% 1920x1080 0 --set Video-Glide64mk2[autoframeskip]\=True --set Video-Glide64mk2[maxframeskip]\=${fs}"
+            addEmulator 0 "${md_id}-glide64mk2-frameskip-${fs}" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-glide64mk2 %ROM% 0 0 --set Video-Glide64mk2[autoframeskip]\=True --set Video-Glide64mk2[maxframeskip]\=${fs}"
         done
 
-        addEmulator 0 "${md_id}-rice-noframeskip" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM% --set Video-Rice[SkipFrame]\=False"
-        addEmulator 0 "${md_id}-rice-frameskip" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM% --set Video-Rice[SkipFrame]\=True"
+        addEmulator 0 "${md_id}-rice-noframeskip" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM% 0 0 --set Video-Rice[SkipFrame]\=False"
+        addEmulator 0 "${md_id}-rice-frameskip" "n64" "$md_inst/bin/mupen64plus.sh mupen64plus-video-rice %ROM% 0 0 --set Video-Rice[SkipFrame]\=True"
     fi
 
     addSystem "n64"
