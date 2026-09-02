@@ -12,7 +12,7 @@ rp_module_section="exp"
 rp_module_flags=""
 
 function depends_lr-freej2me-plus() {
-    getDepends ant default-jdk
+    getDepends ant default-jdk build-essential
 }
 
 function sources_lr-freej2me-plus() {
@@ -20,10 +20,12 @@ function sources_lr-freej2me-plus() {
 }
 
 function build_lr-freej2me-plus() {
-    # Current upstream build.xml still targets Java 6. Modern JDKs reject
-    # -source/-target 1.6, while 1.7 builds successfully for our RetroPie test.
-    sed -i 's/<property name="source.version" value="1\.6"\/>/<property name="source.version" value="1.7"\/>/' build.xml
-    sed -i 's/<property name="target.version" value="1\.6"\/>/<property name="target.version" value="1.7"\/>/' build.xml
+    # Upstream still targets Java 6 and references rt.jar. Modern JDKs no longer
+    # ship rt.jar and reject source/target 1.6, so build the Java side as Java 8
+    # and let javac use the current platform classes.
+    sed -i 's/<property name="source.version" value="1\.6"\/>/<property name="source.version" value="1.8"\/>/' build.xml
+    sed -i 's/<property name="target.version" value="1\.6"\/>/<property name="target.version" value="1.8"\/>/' build.xml
+    sed -i '/bootclasspath="${java.home}\/lib\/rt.jar"/d' build.xml
 
     ant
 
