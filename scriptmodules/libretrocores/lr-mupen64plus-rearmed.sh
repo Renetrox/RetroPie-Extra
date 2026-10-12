@@ -5,7 +5,7 @@
 
 rp_module_id="lr-mupen64plus-rearmed"
 rp_module_desc="Nintendo 64 emulator - Mupen64Plus-ReARMed (legacy renderers and frameskip)"
-rp_module_help="ROM Extensions: .z64 .n64 .v64 .zip\\n\\nCopy Nintendo 64 ROMs to $romdir/n64\\n\\nDefaults to Glide64 when available. Select a different renderer from RetroArch Core Options if needed."
+rp_module_help="ROM Extensions: .z64 .n64 .v64 .zip\n\nCopy Nintendo 64 ROMs to $romdir/n64\n\nDefaults to Glide64 when available. Select a different renderer from RetroArch Core Options if needed."
 rp_module_licence="GPL2 https://github.com/libretro/parallel-n64"
 rp_module_repo="git https://github.com/Renetrox/Mupen64Plus-ReARMed.git frameskip-modern"
 rp_module_section="exp"
