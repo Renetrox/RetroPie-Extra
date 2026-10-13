@@ -164,6 +164,7 @@ I'll have a note at the end with some Info about it. if there is NO note or [X] 
 - [X] - `lr-mesen-s.sh` - Super Nintendo emu - Mesen-S port for libretro - **Installs, Plays, Runs well**
 - [] - `lr-mess-jaguar.sh` - Add support for using lr-mess for Jaguar games, uses atarijaguar system name to match lr-virtualjaguar. - **did not test due to not having mess installed yet**
 - [X] - `lr-mu.sh` - Palm OS emu - Mu port for libretro - **Installs, Plays, Runs**
+- [X] - `lr-mupen64plus-rearmed.sh` - Nintendo 64 libretro restoration core with Glide64/Rice frameskip - **Installed and running on Orange Pi 4A (Debian 12 ARM64); other platforms untested**
 - [X] - `lr-oberon.sh` - Oberon RISC emulator for libretro - **Installs**
 - [ ] - `lr-openlara.sh` - Tomb Raider engine - OpenLara port for libretro - **Installs Might work, dont have correct files to test**
 - [ ] - `lr-play.sh` - PlayStation 2 emulator - Play port for libretro - **x86 only**
