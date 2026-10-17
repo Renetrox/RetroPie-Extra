@@ -7,14 +7,14 @@
 # ~/.emulationstation or /etc/emulationstation settings.
 #
 # This installs the non-BATOCERA build of the experimental fork.
-# Native scraping and manual controller configuration use the Tarave bridges.
-# Batocera distribution services are not provided by this package.
+# Batocera-specific services, launch hooks, and emulator hotkeys are
+# NOT provided by this package.
 
 rp_module_id="batocera-es-test"
-rp_module_desc="Tarave-ES - experimental RetroPie frontend (Batocera base)"
-rp_module_help="Tarave-ES experiment for Linux/RetroPie.\n\nLaunch from an X11 desktop with: batocera-es-test\n\nUser settings: $home/.local/share/batocera-es-test/.emulationstation\nUses RetroPie's /etc/emulationstation/es_systems.cfg if present.\n\nDoes not replace EmulationStation/ES-X. Includes native scrapers and a RetroPie controller bridge. Emulator support depends on installed RetroPie configurators."
+rp_module_desc="Batocera-ES (Renetrox) - isolated experimental RetroPie frontend"
+rp_module_help="Standalone Batocera-ES experiment for Linux/RetroPie.\n\nLaunch from an X11 desktop with: batocera-es-test\n\nUser settings: $home/.local/share/batocera-es-test/.emulationstation\nUses RetroPie's /etc/emulationstation/es_systems.cfg if present.\n\nDoes not replace EmulationStation/ES-X. Batocera-specific services and emulator-exit hotkeys may not work."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
-rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/skyscraper-gui-prototype"
+rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
 rp_module_flags=""
 
@@ -26,7 +26,7 @@ function depends_batocera-es-test() {
         rapidjson-dev libasound2-dev \
         libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
         libvlc-dev libvlccore-dev vlc-bin \
-        libudev-dev gettext xmlstarlet
+        libudev-dev gettext
 }
 
 function sources_batocera-es-test() {
@@ -45,8 +45,6 @@ function build_batocera-es-test() {
         -DENABLE_FILEMANAGER=OFF
         -DENABLE_TTS=OFF
         -DCEC=OFF
-        -DTARAVE_ESX_SCRAPER_COMPAT=ON
-        -DTARAVE_ENABLE_SKYSCRAPER=OFF
     )
 
     # Desktop/Panfrost X11 -> GL 2.1 renderer. Non-X11 GLES platform -> GLES2.
