@@ -2,8 +2,9 @@
 #
 # Batocera-ES (Renetrox standalone experiment) for RetroPie
 #
-# ES-X Next installs as RetroPie's active EmulationStation entrypoint.
-# The previous /usr/bin/emulationstation launcher is preserved for rollback.
+# ES-X Next installs beside RetroPie's existing EmulationStation/ES-X.
+# Switching the default /usr/bin/emulationstation launcher is opt-in
+# and reversible; existing user preferences and ROMs are never removed.
 # This module never removes ES-X or rewrites its saved settings.
 #
 # This installs the non-BATOCERA build of the experimental fork.
@@ -11,8 +12,8 @@
 # NOT provided by this package.
 
 rp_module_id="batocera-es-test"
-rp_module_desc="ES-X Next (Batocera-ES fork) - RetroPie frontend with reversible launcher takeover"
-rp_module_help="ES-X Next for Linux/RetroPie.\n\nAfter installation the usual emulationstation command (including RetroPie autostart) launches ES-X Next.\nThe previous executable/launcher is backed up as /usr/bin/emulationstation.batocera-es-test.previous and restored on removal.\nES-X and its settings are not deleted.\n\nDirect launch: batocera-es-test\nUser settings: $home/.local/share/batocera-es-test/.emulationstation\nUses RetroPie's /etc/emulationstation/es_systems.cfg if present."
+rp_module_desc="ES-X Next (Tarave) - standalone RetroPie frontend with optional reversible switch"
+rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nOptional import: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
@@ -26,7 +27,7 @@ function depends_batocera-es-test() {
         rapidjson-dev libasound2-dev \
         libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev \
         libvlc-dev libvlccore-dev vlc-bin \
-        libudev-dev gettext
+        libudev-dev gettext xmlstarlet
 }
 
 function sources_batocera-es-test() {
@@ -77,8 +78,13 @@ function install_batocera-es-test() {
         "emulationstation"
         "resources"
         "locale"
+        "themes"
         "LICENSE.md"
         "README.md"
+        "GAMELISTS.md"
+        "THEMES.md"
+        "SYSTEMS.md"
+        "CREDITS.md"
     )
 }
 
@@ -192,11 +198,69 @@ function _batocera_es_test_restore() {
     fi
 }
 
+# RetroPie normally installs a default theme in /etc/emulationstation/themes.
+# That location is shared with ES-X. Instead seed Tarave's private folder only
+# when no theme (downloaded or user-created) is already installed.
+function _tarave_seed_default_theme() {
+    local cfg="$1"
+    local source="$md_inst/themes/tarave-minimal"
+    local dest="$cfg/themes/tarave-minimal"
+    local themes="$cfg/themes"
+    [[ -d "$source" && -r "$source/theme.xml" ]] || return 1
+    mkdir -p "$themes" || return 1
+    if [[ -d "$dest" ]]; then
+        return 0
+    fi
+    if [[ -n "$(find "$themes" -maxdepth 4 -name theme.xml -type f -print -quit 2>/dev/null)" ]]; then
+        echo "Tarave user theme already exists; leaving theme selection unchanged."
+        return 0
+    fi
+    cp -a -- "$source" "$dest" || return 1
+    chown -R "$__user:$__group" "$dest" || return 1
+    echo "Installed small offline fallback theme in Tarave private data."
+}
+
+# Keep the graphical shortcut distinct from RetroPie's existing desktop file.
+function _tarave_desktop_entry() {
+    local desktop="/usr/local/share/applications/tarave-es-next.desktop"
+    if [[ -e "$desktop" ]] && ! grep -Fqx '# TARAVE_ES_NEXT_MANAGED=1' "$desktop"; then
+        echo "Refusing to replace an unrelated desktop entry at $desktop" >&2
+        return 0
+    fi
+    mkdir -p "$(dirname "$desktop")" || return 1
+    cat > "$desktop" <<EOF
+[Desktop Entry]
+# TARAVE_ES_NEXT_MANAGED=1
+Type=Application
+Name=ES-X Next (Tarave)
+Comment=Independent EmulationStation frontend for RetroPie
+Exec=/usr/local/bin/batocera-es-test
+TryExec=/usr/local/bin/batocera-es-test
+Icon=$md_inst/resources/window_icon_256.png
+Terminal=false
+Categories=Game;Emulator;
+EOF
+    chmod 644 "$desktop"
+}
+
 function configure_batocera-es-test() {
     [[ "$md_mode" == "remove" ]] && return 0
 
     local launcher="/usr/local/bin/batocera-es-test"
     local target="$md_inst/batocera-es-test.sh"
+    local user_root="$home/.local/share/batocera-es-test"
+    local user_cfg="$user_root/.emulationstation"
+
+    # Unlike RetroPie's regular EmulationStation package, this must NEVER
+    # moveConfigDir ~/.emulationstation, install global themes, or reconfigure
+    # the controller mapping of the other frontend.
+    for directory in "$user_root" "$user_cfg" "$user_cfg/themes" \
+                     "$user_cfg/gamelists" "$user_cfg/music" \
+                     "$user_cfg/themesettings" "$user_cfg/padtokey"; do
+        mkdir -p "$directory" || return 1
+        chown "$__user:$__group" "$directory" || return 1
+    done
+    _tarave_seed_default_theme "$user_cfg" || return 1
 
     # Keep per-user data separate from ES-X and normal RetroPie configs.
     # Only /usr/bin/emulationstation is switched, with reversible backup.
@@ -213,6 +277,24 @@ fi
 inst_dir="$(dirname "$(readlink -f "$0")")"
 user_home="${BATOCERA_ES_TEST_HOME:-$HOME/.local/share/batocera-es-test}"
 user_cfg="$user_home/.emulationstation"
+
+# Explicit, one-time import of legacy Wine/Kodi systems, never automatic.
+# The importer writes only in Tarave's private config; no ES-X installation
+# is required for normal startup or for installing this package.
+if [[ "${1:-}" == "--import-legacy-systems" ]]; then
+    shift
+    if (( $# != 0 )); then
+        echo "Usage: batocera-es-test --import-legacy-systems" >&2
+        exit 2
+    fi
+    import_catalog="/etc/emulationstation/es_systems.cfg"
+    if [[ -r /opt/retropie/configs/all/emulationstation/es_systems.cfg ]]; then
+        import_catalog="/opt/retropie/configs/all/emulationstation/es_systems.cfg"
+    fi
+    exec python3 "$inst_dir/resources/tarave-import-legacy-systems.py" \
+        --destination "$user_cfg/es_systems_legacy_import.cfg" \
+        --catalog "$import_catalog"
+fi
 
 # Opt-in console/DRM test. Never changes the graphical default, RetroPie
 # autostart, display manager, or the globally installed frontend.
@@ -241,14 +323,27 @@ fi
 
 mkdir -p "$user_cfg"
 
-# Reference RetroPie's system catalog without copying or modifying it.
-# A user's own file is preferred over this link and is never overwritten.
+# RetroPie allows a user's system catalog at
+# /opt/retropie/configs/all/emulationstation/es_systems.cfg, which may list
+# Kodi, Wine or other extras missing in the global /etc definition. Prefer it,
+# but never import/share the old frontend's settings or input mappings.
+user_catalog="/opt/retropie/configs/all/emulationstation/es_systems.cfg"
+default_catalog="/etc/emulationstation/es_systems.cfg"
+if [[ ! -r "$user_catalog" ]]; then
+    user_catalog="$default_catalog"
+fi
 if [[ ! -e "$user_cfg/es_systems.cfg" && ! -L "$user_cfg/es_systems.cfg" ]]; then
-    if [[ -r /etc/emulationstation/es_systems.cfg ]]; then
-        ln -s /etc/emulationstation/es_systems.cfg "$user_cfg/es_systems.cfg"
+    if [[ -r "$user_catalog" ]]; then
+        ln -s -- "$user_catalog" "$user_cfg/es_systems.cfg"
     else
-        echo "Warning: no RetroPie es_systems.cfg found at /etc/emulationstation." >&2
+        echo "Warning: no RetroPie es_systems.cfg found (Tarave needs a configured system catalog)." >&2
     fi
+elif [[ -L "$user_cfg/es_systems.cfg" &&
+        "$(readlink "$user_cfg/es_systems.cfg")" == "$default_catalog" &&
+        "$user_catalog" != "$default_catalog" ]]; then
+    # Refresh only the previous symlink created by this module. Never rewrite
+    # regular/private configuration files or foreign symlinks.
+    ln -sfn -- "$user_catalog" "$user_cfg/es_systems.cfg"
 fi
 
 cd "$inst_dir"
@@ -280,6 +375,10 @@ LAUNCHER
     fi
     ln -sfn "$target" "$launcher"
 
+    if isPlatform "x11"; then
+        _tarave_desktop_entry || return 1
+    fi
+
     # ES-X is the user's preferred frontend. Installing/testing Next must
     # NOT switch the default automatically. A user-requested switch, or an
     # already active managed wrapper, may be refreshed in place.
@@ -303,7 +402,13 @@ function remove_batocera-es-test() {
         rm -f "$launcher"
     fi
 
-    # User settings, gamelists, and original EmulationStation remain untouched.
+    local desktop="/usr/local/share/applications/tarave-es-next.desktop"
+    if [[ -f "$desktop" ]] && grep -Fqx '# TARAVE_ES_NEXT_MANAGED=1' "$desktop"; then
+        rm -f -- "$desktop"
+    fi
+
+    # Preserve ALL per-user Tarave/ES-X data, themes, input maps, ROMs and
+    # RetroPie system catalogs. Package removal only unlinks installed launchers.
 }
 
 # Optional frontend switch. Existing desktop/tty RetroPie autostart invokes
@@ -317,11 +422,15 @@ function gui_batocera-es-test() {
             1 "Activate ES-X Next as default" \
             2 "Restore previously installed EmulationStation / ES-X" \
             3 "Keep both; manually test with batocera-es-test --tty-test" \
+            4 "How to import Wine/Kodi only (manual optional command)" \
             2>&1 >/dev/tty)" || break
         case "$choice" in
             1) _batocera_es_test_activate /usr/bin/emulationstation "$launcher" ;;
             2) _batocera_es_test_restore /usr/bin/emulationstation ;;
             3) echo "Use batocera-es-test --tty-test from a physical text console."; break ;;
+            4) echo "Run as the logged-in user: batocera-es-test --import-legacy-systems"
+               echo "This copies existing Wine/Kodi definitions once into Tarave's private folder."
+               echo "ES-X files are never edited."; break ;;
         esac
     done
 }
