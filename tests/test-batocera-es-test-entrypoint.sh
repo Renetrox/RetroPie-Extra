@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 temp="$(mktemp -d)"
 trap 'rm -rf "$temp"' EXIT
+home="$HOME"
 source "$root/scriptmodules/supplementary/batocera-es-test.sh"
 original="$temp/emulationstation"
 next="$temp/next"
