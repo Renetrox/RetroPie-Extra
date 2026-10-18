@@ -111,12 +111,12 @@ function _batocera_es_test_activate() {
 
     local tmp moved_original=0
     tmp="$(mktemp "${entry}.batocera-es-test.XXXXXX")" || return 1
-    cat > "$tmp" <<EOF
-#!/usr/bin/env bash
-# BATOCERA_ES_TEST_MANAGED_ENTRYPOINT=1
-# RetroPie frontend selector, managed by batocera-es-test. Previous: $backup
-exec $(printf '%q' "$command") "\\$@"
-EOF
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf '# BATOCERA_ES_TEST_MANAGED_ENTRYPOINT=1\n'
+        printf '# RetroPie frontend selector, managed by batocera-es-test.\n'
+        printf 'exec %q "$@"\n' "$command"
+    } > "$tmp"
     if ! chmod 755 "$tmp"; then
         rm -f "$tmp"
         return 1
