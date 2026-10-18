@@ -190,6 +190,31 @@ inst_dir="$(dirname "$(readlink -f "$0")")"
 user_home="${BATOCERA_ES_TEST_HOME:-$HOME/.local/share/batocera-es-test}"
 user_cfg="$user_home/.emulationstation"
 
+# Opt-in console/DRM test. Never changes the graphical default, RetroPie
+# autostart, display manager, or the globally installed frontend.
+tty_test=0
+if [[ "${1:-}" == "--tty-test" ]]; then
+    tty_test=1
+    shift
+    local_tty="$(tty 2>/dev/null || true)"
+    if [[ ! "$local_tty" =~ ^/dev/tty[0-9]+$ ]]; then
+        echo "TTY test requires a physical Linux console (Ctrl+Alt+F3), not SSH or a terminal emulator." >&2
+        exit 2
+    fi
+    if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+        echo "Graphical session detected. Log in to a fresh text TTY before --tty-test." >&2
+        exit 2
+    fi
+    if ! compgen -G '/dev/dri/card[0-9]*' >/dev/null; then
+        echo "No /dev/dri/card* found; kernel DRM/KMS is required for SDL kmsdrm." >&2
+        exit 2
+    fi
+    export SDL_VIDEODRIVER=kmsdrm
+    export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
+    echo "Trying native DRM/KMS on $local_tty with SDL_VIDEODRIVER=$SDL_VIDEODRIVER"
+    echo "If X11/Wayland still owns the GPU, quit the desktop before retrying."
+fi
+
 mkdir -p "$user_cfg"
 
 # Reference RetroPie's system catalog without copying or modifying it.
@@ -203,6 +228,19 @@ if [[ ! -e "$user_cfg/es_systems.cfg" && ! -L "$user_cfg/es_systems.cfg" ]]; the
 fi
 
 cd "$inst_dir"
+if (( tty_test )); then
+    # Tee is used only for this interactive test so that the prompt returns
+    # and SDL failures remain visible for diagnosis.
+    log_dir="$user_home/tty-test"
+    mkdir -p "$log_dir"
+    log_file="$log_dir/last-run.log"
+    set -o pipefail
+    "$inst_dir/emulationstation" --home "$user_home" "$@" 2>&1 | tee "$log_file"
+    result="${PIPESTATUS[0]}"
+    echo "ES-X Next console test exit status: $result"
+    echo "TTY test log: $log_file"
+    exit "$result"
+fi
 exec "$inst_dir/emulationstation" --home "$user_home" "$@"
 LAUNCHER
 
