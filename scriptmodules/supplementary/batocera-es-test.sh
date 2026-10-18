@@ -215,6 +215,13 @@ function _tarave_seed_default_theme() {
         echo "Tarave user theme already exists; leaving theme selection unchanged."
         return 0
     fi
+    # Existing RetroPie systems already have a usable global Carbon theme.
+    # Avoid unexpectedly replacing its look with the emergency fallback.
+    if [[ -d /etc/emulationstation/themes ]] &&
+       [[ -n "$(find /etc/emulationstation/themes -maxdepth 4 -name theme.xml -type f -print -quit 2>/dev/null)" ]]; then
+        echo "RetroPie system theme available; no Tarave fallback needed."
+        return 0
+    fi
     cp -a -- "$source" "$dest" || return 1
     chown -R "$__user:$__group" "$dest" || return 1
     echo "Installed small offline fallback theme in Tarave private data."
