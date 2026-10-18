@@ -18,7 +18,7 @@ source "$root/scriptmodules/supplementary/batocera-es-test.sh"
 # The complete frontend resource bundle is retained; none of these resources
 # may be omitted when the package is staged by RetroPie-Setup.
 install_batocera-es-test
-for file in emulationstation resources locale themes LICENSE.md README.md THEMES.md GAMELISTS.md SYSTEMS.md CREDITS.md; do
+for file in emulationstation resources locale themes scripts LICENSE.md opensans_license.txt ubuntu_licence.txt README.md THEMES.md GAMELISTS.md SYSTEMS.md CREDITS.md; do
     found=0
     for item in "${md_ret_files[@]}"; do
         if [[ "$item" == "$file" ]]; then
