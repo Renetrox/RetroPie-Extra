@@ -79,7 +79,10 @@ function install_batocera-es-test() {
         "resources"
         "locale"
         "themes"
+        "scripts"
         "LICENSE.md"
+        "opensans_license.txt"
+        "ubuntu_licence.txt"
         "README.md"
         "GAMELISTS.md"
         "THEMES.md"
@@ -288,6 +291,15 @@ user_cfg="$user_home/.emulationstation"
 # Explicit, one-time import of legacy Wine/Kodi systems, never automatic.
 # The importer writes only in Tarave's private config; no ES-X installation
 # is required for normal startup or for installing this package.
+if [[ "${1:-}" == "--retropie-menu-check" ]]; then
+    shift
+    if (( $# != 0 )); then
+        echo "Usage: batocera-es-test --retropie-menu-check" >&2
+        exit 2
+    fi
+    exec bash "$inst_dir/scripts/tarave-retropie-menu.sh" --check
+fi
+
 if [[ "${1:-}" == "--import-legacy-systems" ]]; then
     shift
     if (( $# != 0 )); then
