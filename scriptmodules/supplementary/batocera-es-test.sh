@@ -115,7 +115,31 @@ function _batocera_es_test_activate() {
         printf '#!/usr/bin/env bash\n'
         printf '# BATOCERA_ES_TEST_MANAGED_ENTRYPOINT=1\n'
         printf '# RetroPie frontend selector, managed by batocera-es-test.\n'
-        printf 'exec %q "$@"\n' "$command"
+        printf 'front=%q\n' "$command"
+        printf 'previous=%q\n' "$backup"
+        cat <<'WRAPPER'
+# On a real Linux text console with no X11/Wayland session, try the
+# native SDL KMS/DRM driver. The previous working ES is the safety net
+# if this GPU/SDL build cannot create a KMS/EGL context.
+if [[ -z "${DISPLAY:-}" && -z "${WAYLAND_DISPLAY:-}" && "$(tty 2>/dev/null)" =~ ^/dev/tty[0-9]+$ ]]; then
+    export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-kmsdrm}"
+    export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-alsa}"
+    if "$front" "$@"; then
+        exit 0
+    else
+        status="$?"
+        echo "ES-X Next console start failed (status $status)." >&2
+        if [[ -x "$previous" ]] &&
+           [[ "$(readlink -f "$previous")" != "$(readlink -f "$front")" ]]; then
+            echo "Restoring the previous EmulationStation for this session." >&2
+            unset SDL_VIDEODRIVER SDL_AUDIODRIVER
+            exec "$previous" "$@"
+        fi
+        exit "$status"
+    fi
+fi
+exec "$front" "$@"
+WRAPPER
     } > "$tmp"
     if ! chmod 755 "$tmp"; then
         rm -f "$tmp"
