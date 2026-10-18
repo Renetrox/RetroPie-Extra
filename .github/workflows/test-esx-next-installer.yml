@@ -7,6 +7,7 @@ on:
     paths:
       - 'scriptmodules/supplementary/batocera-es-test.sh'
       - 'tests/test-batocera-es-test-entrypoint.sh'
+      - 'tests/test-batocera-es-test-package.sh'
       - '.github/workflows/test-esx-next-installer.yml'
   workflow_dispatch:
 
@@ -19,6 +20,8 @@ jobs:
         run: bash -n scriptmodules/supplementary/batocera-es-test.sh
       - name: Reversible launcher takeover and rollback
         run: bash tests/test-batocera-es-test-entrypoint.sh
+      - name: Installed resources and private default theme
+        run: bash tests/test-batocera-es-test-package.sh
       - name: Guard isolated DRM/KMS console test
         run: |
           grep -q -- '--tty-test' scriptmodules/supplementary/batocera-es-test.sh
