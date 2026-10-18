@@ -280,9 +280,16 @@ LAUNCHER
     fi
     ln -sfn "$target" "$launcher"
 
-    # RetroPie autostart.sh and desktop entry already call "emulationstation".
-    # Interpose a small launcher instead of uninstalling or overwriting ES-X.
-    _batocera_es_test_activate /usr/bin/emulationstation "$launcher" || return 1
+    # ES-X is the user's preferred frontend. Installing/testing Next must
+    # NOT switch the default automatically. A user-requested switch, or an
+    # already active managed wrapper, may be refreshed in place.
+    if _batocera_es_test_owns_entry /usr/bin/emulationstation ||
+       [[ "${ESX_NEXT_MAKE_DEFAULT:-0}" == "1" ]]; then
+        _batocera_es_test_activate /usr/bin/emulationstation "$launcher" || return 1
+    else
+        echo "ES-X Next installed side by side; default EmulationStation unchanged."
+        echo "Choose 'Activate as default' from this module's configuration menu."
+    fi
 }
 
 function remove_batocera-es-test() {
@@ -297,4 +304,24 @@ function remove_batocera-es-test() {
     fi
 
     # User settings, gamelists, and original EmulationStation remain untouched.
+}
+
+# Optional frontend switch. Existing desktop/tty RetroPie autostart invokes
+# /usr/bin/emulationstation and will use the selected frontend after switching.
+function gui_batocera-es-test() {
+    local choice
+    local launcher="/usr/local/bin/batocera-es-test"
+    while true; do
+        choice="$(dialog --backtitle "RetroPie - ES-X Next" \
+            --menu "Select the active frontend (no ROM/config deletion)" 16 72 8 \
+            1 "Activate ES-X Next as default" \
+            2 "Restore previously installed EmulationStation / ES-X" \
+            3 "Keep both; manually test with batocera-es-test --tty-test" \
+            2>&1 >/dev/tty)" || break
+        case "$choice" in
+            1) _batocera_es_test_activate /usr/bin/emulationstation "$launcher" ;;
+            2) _batocera_es_test_restore /usr/bin/emulationstation ;;
+            3) echo "Use batocera-es-test --tty-test from a physical text console."; break ;;
+        esac
+    done
 }
