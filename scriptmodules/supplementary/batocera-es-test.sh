@@ -264,7 +264,11 @@ function configure_batocera-es-test() {
     # Unlike RetroPie's regular EmulationStation package, this must NEVER
     # moveConfigDir ~/.emulationstation, install global themes, or reconfigure
     # the controller mapping of the other frontend.
-    for directory in "$user_root" "$user_cfg" "$user_cfg/themes" \
+    # Explicitly create the XDG parents as the login user as well. On a
+    # fresh Debian home ~/.local/share may not exist yet; leaving those
+    # ancestors root-owned would break normal non-root applications.
+    for directory in "$home/.local" "$home/.local/share" \
+                     "$user_root" "$user_cfg" "$user_cfg/themes" \
                      "$user_cfg/gamelists" "$user_cfg/music" \
                      "$user_cfg/themesettings" "$user_cfg/padtokey"; do
         mkdir -p "$directory" || return 1
