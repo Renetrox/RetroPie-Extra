@@ -2,17 +2,17 @@
 #
 # Batocera-ES (Renetrox standalone experiment) for RetroPie
 #
-# Side-by-side test package: DOES NOT replace /usr/bin/emulationstation,
-# DOES NOT remove ES-X, and DOES NOT rewrite the user's existing
-# ~/.emulationstation or /etc/emulationstation settings.
+# ES-X Next installs as RetroPie's active EmulationStation entrypoint.
+# The previous /usr/bin/emulationstation launcher is preserved for rollback.
+# This module never removes ES-X or rewrites its saved settings.
 #
 # This installs the non-BATOCERA build of the experimental fork.
 # Batocera-specific services, launch hooks, and emulator hotkeys are
 # NOT provided by this package.
 
 rp_module_id="batocera-es-test"
-rp_module_desc="Batocera-ES (Renetrox) - isolated experimental RetroPie frontend"
-rp_module_help="Standalone Batocera-ES experiment for Linux/RetroPie.\n\nLaunch from an X11 desktop with: batocera-es-test\n\nUser settings: $home/.local/share/batocera-es-test/.emulationstation\nUses RetroPie's /etc/emulationstation/es_systems.cfg if present.\n\nDoes not replace EmulationStation/ES-X. Batocera-specific services and emulator-exit hotkeys may not work."
+rp_module_desc="ES-X Next (Batocera-ES fork) - RetroPie frontend with reversible launcher takeover"
+rp_module_help="ES-X Next for Linux/RetroPie.\n\nAfter installation the usual emulationstation command (including RetroPie autostart) launches ES-X Next.\nThe previous executable/launcher is backed up as /usr/bin/emulationstation.batocera-es-test.previous and restored on removal.\nES-X and its settings are not deleted.\n\nDirect launch: batocera-es-test\nUser settings: $home/.local/share/batocera-es-test/.emulationstation\nUses RetroPie's /etc/emulationstation/es_systems.cfg if present."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
@@ -82,14 +82,100 @@ function install_batocera-es-test() {
     )
 }
 
+# Take over only the standard RetroPie entrypoint. Do not replace the
+# installed EmulationStation package/binary itself or its data directories.
+# Backup lives next to the original, outside md_inst, so package removal can
+# restore it even after the Next installation directory has been deleted.
+function _batocera_es_test_owns_entry() {
+    local entry="$1"
+    [[ -f "$entry" && ! -L "$entry" ]] || return 1
+    head -n 3 "$entry" | grep -Fqx '# BATOCERA_ES_TEST_MANAGED_ENTRYPOINT=1'
+}
+
+function _batocera_es_test_activate() {
+    local entry="$1"
+    local command="$2"
+    local backup="${entry}.batocera-es-test.previous"
+
+    if [[ ! -x "$command" ]]; then
+        echo "ES-X Next entrypoint unavailable: $command" >&2
+        return 1
+    fi
+
+    # Do not overwrite a launcher that another installer has since taken over.
+    if [[ ( -e "$backup" || -L "$backup" ) ]] && ! _batocera_es_test_owns_entry "$entry"; then
+        echo "Existing backup at $backup, but $entry belongs to another frontend." >&2
+        echo "Leaving both unchanged. Restore/remove that launcher before switching." >&2
+        return 1
+    fi
+
+    local tmp moved_original=0
+    tmp="$(mktemp "${entry}.batocera-es-test.XXXXXX")" || return 1
+    cat > "$tmp" <<EOF
+#!/usr/bin/env bash
+# BATOCERA_ES_TEST_MANAGED_ENTRYPOINT=1
+# RetroPie frontend selector, managed by batocera-es-test. Previous: $backup
+exec $(printf '%q' "$command") "\\$@"
+EOF
+    if ! chmod 755 "$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+
+    if ! _batocera_es_test_owns_entry "$entry" && [[ -e "$entry" || -L "$entry" ]]; then
+        if ! mv -T -- "$entry" "$backup"; then
+            rm -f "$tmp"
+            echo "Could not preserve existing EmulationStation launcher." >&2
+            return 1
+        fi
+        moved_original=1
+    fi
+
+    if ! mv -fT -- "$tmp" "$entry"; then
+        rm -f "$tmp"
+        if (( moved_original )); then
+            mv -T -- "$backup" "$entry" || true
+        fi
+        echo "Could not enable ES-X Next launcher." >&2
+        return 1
+    fi
+
+    echo "ES-X Next is now the active EmulationStation frontend: $entry"
+    if [[ -e "$backup" || -L "$backup" ]]; then
+        echo "Previous launcher saved at: $backup"
+    fi
+}
+
+function _batocera_es_test_restore() {
+    local entry="$1"
+    local backup="${entry}.batocera-es-test.previous"
+
+    if _batocera_es_test_owns_entry "$entry"; then
+        if [[ -e "$backup" || -L "$backup" ]]; then
+            if mv -fT -- "$backup" "$entry"; then
+                echo "Previous EmulationStation launcher restored: $entry"
+            else
+                echo "Failed to restore $backup to $entry" >&2
+                return 1
+            fi
+        else
+            rm -f -- "$entry" || return 1
+            echo "Removed ES-X Next entrypoint (no previous frontend existed)."
+        fi
+    elif [[ -e "$backup" || -L "$backup" ]]; then
+        echo "$entry was changed by another installer; not overwriting it." >&2
+        echo "The saved previous launcher remains at $backup" >&2
+    fi
+}
+
 function configure_batocera-es-test() {
     [[ "$md_mode" == "remove" ]] && return 0
 
     local launcher="/usr/local/bin/batocera-es-test"
     local target="$md_inst/batocera-es-test.sh"
 
-    # Never replace the system EmulationStation executable or startup script.
     # Keep per-user data separate from ES-X and normal RetroPie configs.
+    # Only /usr/bin/emulationstation is switched, with reversible backup.
     cat > "$target" <<'LAUNCHER'
 #!/usr/bin/env bash
 # Managed by the batocera-es-test RetroPie-Extra module.
@@ -131,9 +217,16 @@ LAUNCHER
         fi
     fi
     ln -sfn "$target" "$launcher"
+
+    # RetroPie autostart.sh and desktop entry already call "emulationstation".
+    # Interpose a small launcher instead of uninstalling or overwriting ES-X.
+    _batocera_es_test_activate /usr/bin/emulationstation "$launcher" || return 1
 }
 
 function remove_batocera-es-test() {
+    # Restore the earlier frontend BEFORE the installed Next files disappear.
+    _batocera_es_test_restore /usr/bin/emulationstation || return 1
+
     local launcher="/usr/local/bin/batocera-es-test"
     local target="$md_inst/batocera-es-test.sh"
 
