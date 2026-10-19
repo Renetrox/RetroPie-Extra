@@ -48,7 +48,8 @@ sudo -v || exit 1
 # Unlike setup.sh's GUI route, stdout/stderr remain visible throughout CMake.
 # Do not redirect stdin: apt/sudo and terminal programs may require it.
 set +e
-sudo "$packages" batocera-es-test _source_ 2>&1 | tee "$log"
+sudo env TARAVE_INSTALL_SIDE_BY_SIDE="${TARAVE_INSTALL_SIDE_BY_SIDE:-0}" \
+    "$packages" batocera-es-test _source_ 2>&1 | tee "$log"
 result=${PIPESTATUS[0]}
 set -e
 if (( result == 0 )); then
