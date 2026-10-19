@@ -9,6 +9,7 @@ on:
       - 'tests/test-batocera-es-test-entrypoint.sh'
       - 'tests/test-batocera-es-test-package.sh'
       - 'tests/test-batocera-es-test-install-direct.sh'
+      - 'tests/test-batocera-es-test-classic-compat.sh'
       - 'tests/test-batocera-es-test-gamelist.py'
       - 'tests/test-batocera-es-test-bootstrap-retropiemenu.py'
       - 'scriptmodules/supplementary/batocera-es-test/**'
@@ -26,6 +27,8 @@ jobs:
         run: bash tests/test-batocera-es-test-entrypoint.sh
       - name: Working CLI source-installer with actual PTY
         run: bash tests/test-batocera-es-test-install-direct.sh
+      - name: Classic EmulationStation coexistence and system catalog migration
+        run: bash tests/test-batocera-es-test-classic-compat.sh
       - name: Installed resources and private default theme
         run: bash tests/test-batocera-es-test-package.sh
       - name: RetroPie Setup menu metadata isolation and safe merges
