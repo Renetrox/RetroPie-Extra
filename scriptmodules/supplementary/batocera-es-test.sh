@@ -13,7 +13,7 @@
 
 rp_module_id="batocera-es-test"
 rp_module_desc="ES-X Next (Tarave) - standalone RetroPie frontend with optional reversible switch"
-rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
+rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
@@ -354,6 +354,49 @@ inst_dir="$(dirname "$(readlink -f "$0")")"
 user_home="${BATOCERA_ES_TEST_HOME:-$HOME/.local/share/batocera-es-test}"
 user_cfg="$user_home/.emulationstation"
 
+# The upstream Batocera "Minimal" theme is ~6-7 MiB, formatVersion 7.
+# Installing it is explicitly opt-in: do not download during the lengthy
+# source build, do not modify the selected ThemeSet, and never overwrite
+# existing theme folders. The original upstream attribution stays intact.
+if [[ "${1:-}" == "--install-minimal-theme" ]]; then
+    shift
+    if (( $# != 0 )); then
+        echo "Usage: batocera-es-test --install-minimal-theme" >&2
+        exit 2
+    fi
+    themes="$user_cfg/themes"
+    target="$themes/minimal"
+    mkdir -p "$themes"
+    if [[ -e "$target" || -L "$target" ]]; then
+        echo "Minimal theme is already present at $target; leaving it unchanged."
+        exit 0
+    fi
+    temp="$(mktemp -d "$themes/.minimal-install.XXXXXX")"
+    trap 'rm -rf -- "$temp"' EXIT
+    if ! git clone --depth 1 --single-branch --quiet \
+        https://github.com/crcerror/es-theme-minimal.git "$temp/source"; then
+        echo "Could not download Minimal theme; existing Tarave data was not changed." >&2
+        exit 1
+    fi
+    if [[ ! -r "$temp/source/theme.xml" ]] || \
+       ! grep -Eq '<formatVersion>7</formatVersion>' "$temp/source/theme.xml"; then
+        echo "Unexpected upstream Minimal theme format; not installing." >&2
+        exit 1
+    fi
+    # A theme is a collection of XML and assets. Strip Git history from
+    # the staged copy to keep the actual installed footprint small.
+    rm -rf -- "$temp/source/.git"
+    if [[ -e "$target" || -L "$target" ]]; then
+        echo "Minimal theme appeared meanwhile; preserving it."
+        exit 0
+    fi
+    mv -- "$temp/source" "$target"
+    echo "Installed upstream Minimal theme: $target"
+    echo "Select 'minimal' in Tarave's UI Settings > Theme Set."
+    echo "Credits: lilbud / fabricecaruso / crcerror. License CC-BY-NC-SA."
+    exit 0
+fi
+
 # Refresh metadata without recompiling; --sync-gamelists includes all older
 # systems and still refreshes RetroPie Setup. No changes to legacy XML files.
 if [[ "${1:-}" == "--sync-gamelists" ]]; then
@@ -534,6 +577,7 @@ function gui_batocera-es-test() {
             4 "Reimport missing custom systems (Wine, Kodi, etc.)" \
             5 "Refresh RetroPie Setup icon/descriptions in Tarave" \
             6 "Copy all previous gamelists (Wine, Kodi, Ports, etc.)" \
+            7 "Download lightweight Batocera Minimal theme (optional)" \
             2>&1 >/dev/tty)" || break
         case "$choice" in
             1) _batocera_es_test_activate /usr/bin/emulationstation "$launcher" ;;
@@ -547,6 +591,9 @@ function gui_batocera-es-test() {
                break ;;
             6) _tarave_sync_all_gamelists "$home" || return 1
                echo "Previous gamelists imported. Restart Tarave to reload metadata."
+               break ;;
+            7) sudo -H -u "$__user" "$launcher" --install-minimal-theme || return 1
+               echo "Select theme 'minimal' in Tarave UI Settings > Theme Set."
                break ;;
         esac
     done
