@@ -13,7 +13,7 @@
 
 rp_module_id="batocera-es-test"
 rp_module_desc="ES-X Next (Tarave) - standalone RetroPie frontend with optional reversible switch"
-rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
+rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nInitialize isolated RetroPie menu: batocera-es-test --initialize-retropie-menu\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
@@ -315,6 +315,19 @@ function _tarave_sync_all_gamelists() {
     sudo -H -u "$__user" python3 "$helper" --home "$user_home" --target "$target" --all
 }
 
+function _tarave_bootstrap_retropie_menu() {
+    local user_home="$1"
+    local script="$md_inst/bootstrap-retropiemenu.py"
+    [[ -f "$script" ]] || {
+        echo "Missing Tarave RetroPie menu bootstrap: $script" >&2
+        return 1
+    }
+    sudo -H -u "$__user" python3 "$script" \
+        --home "$user_home" \
+        --tarave-home "$user_home/.local/share/batocera-es-test" \
+        --setup-dir "$user_home/RetroPie-Setup"
+}
+
 function _tarave_import_missing_systems() {
     local user_home="$1"
     local catalog="/opt/retropie/configs/all/emulationstation/es_systems.cfg"
@@ -370,6 +383,30 @@ function configure_batocera-es-test() {
     }
     mkdir -p "$md_inst/resources" || return 1
     install -m 644 -- "$system_helper" "$md_inst/resources/tarave-import-legacy-systems.py" || return 1
+    local menu_helper="$md_data/bootstrap-retropiemenu.py"
+    [[ -f "$menu_helper" ]] || {
+        echo "Missing Tarave private RetroPie bootstrap resource: $menu_helper" >&2
+        return 1
+    }
+    install -m 755 -- "$menu_helper" "$md_inst/bootstrap-retropiemenu.py" || return 1
+
+    # A former EmulationStation/ES-X install can have a complete private
+    # es_systems.cfg; import it only if Tarave has no catalog of its own.
+    # This is a snapshot, not a symlink to ES-X. It never replaces an existing
+    # Tarave file, symlink or user choice.
+    local previous_catalog="$home/.emulationstation/es_systems.cfg"
+    local private_catalog="$user_cfg/es_systems.cfg"
+    if [[ -f "$previous_catalog" && ! -e "$private_catalog" &&
+          ! -L "$private_catalog" ]]; then
+        if sudo -H -u "$__user" python3 -c \
+          'import sys,xml.etree.ElementTree as E;sys.exit(0 if E.parse(sys.argv[1]).getroot().tag=="systemList" else 1)' \
+          "$previous_catalog"; then
+            sudo -H -u "$__user" cp -n -- "$previous_catalog" "$private_catalog" ||
+                echo "Warning: previous es_systems.cfg could not be copied." >&2
+        else
+            echo "Warning: previous es_systems.cfg is not valid XML; keeping Tarave unchanged." >&2
+        fi
+    fi
 
     _tarave_sync_all_gamelists "$home" ||
         echo "Warning: previous gamelists sync failed; frontend files remain installed." >&2
@@ -379,6 +416,13 @@ function configure_batocera-es-test() {
     # overwriting user customizations. No dependency on the old frontend.
     _tarave_import_missing_systems "$home" ||
         echo "Warning: missing-system import failed; leaving other configurations untouched." >&2
+
+    # On fresh installs, no previous EmulationStation metadata may exist.
+    # Generate independent .rp shortcuts, menu icons and gamelist entries,
+    # registering a private RetroPie system if the shared menu is absent.
+    # Never invoke 'retropiemenu configure': it would alter ES-X/RetroPie.
+    _tarave_bootstrap_retropie_menu "$home" ||
+        echo "Warning: Tarave private RetroPie menu bootstrap failed." >&2
 
     # Keep per-user data separate from ES-X and normal RetroPie configs.
     # Only /usr/bin/emulationstation is switched, with reversible backup.
@@ -450,6 +494,19 @@ if [[ "${1:-}" == "--sync-gamelists" ]]; then
     exec python3 "$inst_dir/retropie-gamelist-sync.py" \
         --home "$HOME" \
         --target "$user_cfg/gamelists/retropie/gamelist.xml" --all
+fi
+
+# An explicit standalone bootstrap of fresh-install RetroPie Setup shortcuts,
+# even when no original gamelist/retropiemenu directory exists.
+if [[ "${1:-}" == "--initialize-retropie-menu" ]]; then
+    shift
+    if (( $# != 0 )); then
+        echo "Usage: batocera-es-test --initialize-retropie-menu" >&2
+        exit 2
+    fi
+    exec python3 "$inst_dir/bootstrap-retropiemenu.py" \
+        --home "$HOME" --tarave-home "$user_home" \
+        --setup-dir "$HOME/RetroPie-Setup"
 fi
 
 # Keep a lighter RetroPie-menu-only refresh operation, too.
@@ -631,6 +688,7 @@ function gui_batocera-es-test() {
             5 "Refresh RetroPie Setup icon/descriptions in Tarave" \
             6 "Copy all previous gamelists (Wine, Kodi, Ports, etc.)" \
             7 "Download lightweight Batocera Minimal theme (optional)" \
+            8 "Initialize independent RetroPie Setup menu in Tarave" \
             2>&1 >/dev/tty)" || break
         case "$choice" in
             1) _batocera_es_test_activate /usr/bin/emulationstation "$launcher" ;;
@@ -647,6 +705,9 @@ function gui_batocera-es-test() {
                break ;;
             7) sudo -H -u "$__user" "$launcher" --install-minimal-theme || return 1
                echo "Select theme 'minimal' in Tarave UI Settings > Theme Set."
+               break ;;
+            8) _tarave_bootstrap_retropie_menu "$home" || return 1
+               echo "Independent RetroPie Setup shortcuts and metadata initialized."
                break ;;
         esac
     done
