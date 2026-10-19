@@ -341,6 +341,43 @@ function _tarave_import_missing_systems() {
         --destination "$dst" --catalog "$catalog"
 }
 
+# Preserve the update behavior of classic RetroPie. For a shared catalog,
+# the normal Tarave launcher will install a link to the canonical shared path.
+# For a separate manually maintained user catalog, make a one-time private
+# snapshot without touching the prior EmulationStation installation.
+function _tarave_import_previous_system_catalog() {
+    local prior="$1"
+    local private="$2"
+    shift 2
+    if [[ ! -f "$prior" || -e "$private" || -L "$private" ]]; then
+        return 0
+    fi
+
+    local canonical_prior
+    canonical_prior="$(readlink -f -- "$prior")" || return 0
+    local shared
+    for shared in "$@"; do
+        if [[ -f "$shared" && "$canonical_prior" == "$(readlink -f -- "$shared")" ]]; then
+            echo "Tarave: prior system catalog is RetroPie's shared catalog; keeping it live."
+            return 0
+        fi
+    done
+
+    # Another independent ES instance can have fully custom definitions.
+    # Validate first; never replace an existing Tarave system file.
+    if sudo -H -u "$__user" python3 -c \
+        'import sys,xml.etree.ElementTree as ET;sys.exit(0 if ET.parse(sys.argv[1]).getroot().tag=="systemList" else 1)' \
+        "$prior"; then
+        sudo -H -u "$__user" cp -n -- "$prior" "$private" || {
+            echo "Warning: previous custom es_systems.cfg could not be copied." >&2
+            return 1
+        }
+        echo "Tarave: imported independently customized es_systems.cfg, original preserved."
+    else
+        echo "Warning: previous es_systems.cfg is invalid XML; skipping private copy." >&2
+    fi
+}
+
 function configure_batocera-es-test() {
     [[ "$md_mode" == "remove" ]] && return 0
 
@@ -390,23 +427,15 @@ function configure_batocera-es-test() {
     }
     install -m 755 -- "$menu_helper" "$md_inst/bootstrap-retropiemenu.py" || return 1
 
-    # A former EmulationStation/ES-X install can have a complete private
-    # es_systems.cfg; import it only if Tarave has no catalog of its own.
-    # This is a snapshot, not a symlink to ES-X. It never replaces an existing
-    # Tarave file, symlink or user choice.
-    local previous_catalog="$home/.emulationstation/es_systems.cfg"
-    local private_catalog="$user_cfg/es_systems.cfg"
-    if [[ -f "$previous_catalog" && ! -e "$private_catalog" &&
-          ! -L "$private_catalog" ]]; then
-        if sudo -H -u "$__user" python3 -c \
-          'import sys,xml.etree.ElementTree as E;sys.exit(0 if E.parse(sys.argv[1]).getroot().tag=="systemList" else 1)' \
-          "$previous_catalog"; then
-            sudo -H -u "$__user" cp -n -- "$previous_catalog" "$private_catalog" ||
-                echo "Warning: previous es_systems.cfg could not be copied." >&2
-        else
-            echo "Warning: previous es_systems.cfg is not valid XML; keeping Tarave unchanged." >&2
-        fi
-    fi
+    # Classic RetroPie often points ~/.emulationstation/es_systems.cfg at
+    # /opt/retropie/configs/all/emulationstation/es_systems.cfg (or /etc).
+    # Keep tracking that authoritative catalog, so future emulators/systems
+    # continue to appear in Tarave. Copy only a truly independent user file.
+    _tarave_import_previous_system_catalog \
+        "$home/.emulationstation/es_systems.cfg" \
+        "$user_cfg/es_systems.cfg" \
+        "/opt/retropie/configs/all/emulationstation/es_systems.cfg" \
+        "/etc/emulationstation/es_systems.cfg" || return 1
 
     _tarave_sync_all_gamelists "$home" ||
         echo "Warning: previous gamelists sync failed; frontend files remain installed." >&2
