@@ -59,7 +59,7 @@ class FreshRetroPieMenuTests(unittest.TestCase):
         self.assertEqual(app.main(self.home, self.private, self.setup), (0, 0))
         self.assertEqual(self.gamelist.read_bytes(), prev)
 
-    def test_existing_retropie_menu_keeps_shared_path_and_private_edits(self):
+    def test_existing_retropie_menu_copies_old_assets_and_keeps_private_edits(self):
         old_menu = self.home / "RetroPie/retropiemenu"
         old_menu.mkdir(parents=True)
         (old_menu / "rpsetup.rp").touch()
@@ -83,7 +83,7 @@ class FreshRetroPieMenuTests(unittest.TestCase):
                               if x.findtext("path") == "./rpsetup.rp"]), 1)
         self.assertEqual([x.findtext("name") for x in
                           ET.parse(self.overlay).getroot().findall("system")],
-                         ["wine"])
+                         ["wine", "retropie"])
         self.assertEqual((old_menu / "rpsetup.rp").read_bytes(), snap)
         self.assertEqual((self.menu / "custom.sh").read_bytes(),
                          (old_menu / "custom.sh").read_bytes())
