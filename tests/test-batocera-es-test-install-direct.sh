@@ -16,6 +16,7 @@ cat > "$setup/retropie_packages.sh" <<'MOCK'
 printf 'Mock RetroPie: %s\n' "$*"
 [[ "$*" == "batocera-es-test _source_" ]] || exit 98
 [[ "${MOCK_FAIL:-0}" == "1" ]] && exit 42
+exit 0
 MOCK
 cat > "$scratch/bin/sudo" <<'MOCKSUDO'
 #!/usr/bin/env bash
