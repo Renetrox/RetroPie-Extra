@@ -2,6 +2,7 @@
 # Compatibility regression: Tarave coexists with classic EmulationStation.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+home="$HOME"
 source "$root/scriptmodules/supplementary/batocera-es-test.sh"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
