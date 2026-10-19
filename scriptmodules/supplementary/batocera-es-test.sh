@@ -318,6 +318,17 @@ function configure_batocera-es-test() {
         return 1
     fi
     install -m 755 -- "$sync_helper" "$md_inst/retropie-gamelist-sync.py" || return 1
+    # Also refresh the Python-only system importer without requiring another
+    # 30-minute ARM build. Only application resource code is replaced, never
+    # the user's saved Tarave/RetroPie/ES-X configurations or games.
+    local system_helper="$md_data/tarave-import-legacy-systems.py"
+    [[ -f "$system_helper" ]] || {
+        echo "Missing Tarave system importer: $system_helper" >&2
+        return 1
+    }
+    mkdir -p "$md_inst/resources" || return 1
+    install -m 644 -- "$system_helper" "$md_inst/resources/tarave-import-legacy-systems.py" || return 1
+
     _tarave_sync_all_gamelists "$home" ||
         echo "Warning: previous gamelists sync failed; frontend files remain installed." >&2
     # A gamelist only provides artwork/metadata; the corresponding system
