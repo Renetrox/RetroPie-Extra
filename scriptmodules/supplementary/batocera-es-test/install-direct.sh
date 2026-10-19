@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Direct interactive Tarave installer. Uses the exact RetroPie-Setup _source_
 # route verified to work on Orange Pi, bypassing setup.sh's dialog/GUI logging.
-# Does not change the active frontend (ES-X) unless the module was explicitly
-# configured to do so. Supports initial installs as soon as the module is
-# registered in RetroPie-Setup.
+# Installs Tarave as the default RetroPie frontend, retaining the previous
+# ES/ES-X launcher for rollback. Supports opt-out via TARAVE_INSTALL_SIDE_BY_SIDE=1.
+# Requires the module to be registered in RetroPie-Setup.
 set -Eeuo pipefail
 
 if (( $# != 0 )); then
@@ -39,7 +39,8 @@ log="${TARAVE_INSTALL_LOG:-$HOME/tarave-install.log}"
 echo "Tarave: interactive install from RetroPie source (without dialog)"
 echo "RetroPie-Setup: $packages"
 echo "Complete log: $log"
-echo "ES-X remains the default frontend unless explicitly changed later."
+echo "Tarave becomes the default RetroPie frontend after installation."
+echo "The previous EmulationStation launcher is saved for rollback."
 # Prompt before starting the tee pipeline so sudo's interactive password
 # exchange and the subsequent source build both use the original terminal.
 sudo -v || exit 1
