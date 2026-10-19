@@ -63,6 +63,10 @@ class FreshRetroPieMenuTests(unittest.TestCase):
         old_menu = self.home / "RetroPie/retropiemenu"
         old_menu.mkdir(parents=True)
         (old_menu / "rpsetup.rp").touch()
+        (old_menu / "custom.sh").write_text("#!/bin/bash\\necho custom\\n")
+        (old_menu / "custom.sh").chmod(0o755)
+        (old_menu / "icons").mkdir()
+        (old_menu / "icons/custom.png").write_bytes(b"custom icon")
         self.gamelist.parent.mkdir(parents=True)
         self.gamelist.write_text(
             '<gameList><game><path>./rpsetup.rp</path>'
@@ -81,6 +85,14 @@ class FreshRetroPieMenuTests(unittest.TestCase):
                           ET.parse(self.overlay).getroot().findall("system")],
                          ["wine"])
         self.assertEqual((old_menu / "rpsetup.rp").read_bytes(), snap)
+        self.assertEqual((self.menu / "custom.sh").read_bytes(),
+                         (old_menu / "custom.sh").read_bytes())
+        self.assertTrue((self.menu / "custom.sh").stat().st_mode & 0o111)
+        self.assertEqual((self.menu / "icons/custom.png").read_bytes(),
+                         b"custom icon")
+        retro = next(x for x in ET.parse(self.overlay).getroot().findall("system")
+                     if x.findtext("name") == "retropie")
+        self.assertEqual(retro.findtext("path"), str(self.menu))
 
     def test_incomplete_prior_private_retropie_is_safely_completed(self):
         self.overlay.parent.mkdir(parents=True)
