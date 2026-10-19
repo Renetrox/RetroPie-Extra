@@ -10,6 +10,7 @@ on:
       - 'tests/test-batocera-es-test-package.sh'
       - 'tests/test-batocera-es-test-install-direct.sh'
       - 'tests/test-batocera-es-test-gamelist.py'
+      - 'tests/test-batocera-es-test-bootstrap-retropiemenu.py'
       - 'scriptmodules/supplementary/batocera-es-test/**'
       - '.github/workflows/test-esx-next-installer.yml'
   workflow_dispatch:
@@ -29,6 +30,8 @@ jobs:
         run: bash tests/test-batocera-es-test-package.sh
       - name: RetroPie Setup menu metadata isolation and safe merges
         run: python3 tests/test-batocera-es-test-gamelist.py -v
+      - name: Fresh Tarave RetroPie menu bootstrap without touching original settings
+        run: python3 tests/test-batocera-es-test-bootstrap-retropiemenu.py -v
       - name: Guard isolated DRM/KMS console test
         run: |
           grep -q -- '--tty-test' scriptmodules/supplementary/batocera-es-test.sh
