@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 #
-# Batocera-ES (Renetrox standalone experiment) for RetroPie
+# Tarave standalone frontend module for RetroPie
 #
-# ES-X Next installs beside RetroPie's existing EmulationStation/ES-X.
-# Switching the default /usr/bin/emulationstation launcher is opt-in
-# and reversible; existing user preferences and ROMs are never removed.
-# This module never removes ES-X or rewrites its saved settings.
+# Installs its own executable and private settings, and becomes the default
+# RetroPie EmulationStation frontend after a successful source install.
+# The original ES/ES-X launcher is backed up for a reversible rollback.
+# ROMs, emulators, settings and other frontend packages are never removed.
 #
 # This installs the non-BATOCERA build of the experimental fork.
 # Batocera-specific services, launch hooks, and emulator hotkeys are
 # NOT provided by this package.
 
 rp_module_id="batocera-es-test"
-rp_module_desc="ES-X Next (Tarave) - standalone RetroPie frontend with optional reversible switch"
-rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nInitialize isolated RetroPie menu: batocera-es-test --initialize-retropie-menu\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
+rp_module_desc="Tarave - independent RetroPie frontend with safe automatic activation"
+rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls its own frontend and becomes RetroPie's default after install, keeping classic EmulationStation/ES-X available for rollback.\nSettings, music and themes remain private. Set TARAVE_INSTALL_SIDE_BY_SIDE=1 to install without changing the default.\nThe previous /usr/bin/emulationstation launcher is saved and can be restored using this package's GUI.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nInitialize isolated RetroPie menu: batocera-es-test --initialize-retropie-menu\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
@@ -89,6 +89,12 @@ function install_batocera-es-test() {
         "SYSTEMS.md"
         "CREDITS.md"
     )
+
+    # A source install is a deliberate install/upgrade operation. Mark this
+    # installation for activation once configure has successfully prepared
+    # the private frontend. A later "Configure / Options" call must NOT
+    # silently re-activate Tarave after the user restored another frontend.
+    touch "$md_inst/.tarave-activate-after-install" || return 1
 }
 
 # Take over only the standard RetroPie entrypoint. Do not replace the
@@ -660,16 +666,44 @@ LAUNCHER
     fi
     _tarave_direct_installer || return 1
 
-    # ES-X is the user's preferred frontend. Installing/testing Next must
-    # NOT switch the default automatically. A user-requested switch, or an
-    # already active managed wrapper, may be refreshed in place.
-    if _batocera_es_test_owns_entry /usr/bin/emulationstation ||
-       [[ "${ESX_NEXT_MAKE_DEFAULT:-0}" == "1" ]]; then
-        _batocera_es_test_activate /usr/bin/emulationstation "$launcher" || return 1
-    else
-        echo "ES-X Next installed side by side; default EmulationStation unchanged."
-        echo "Choose 'Activate as default' from this module's configuration menu."
+    # A successful source install selects Tarave automatically, without
+    # replacing the previous ES/ES-X package or touching its private data.
+    # Source installs set the marker in install(); configure-only calls don't.
+    _tarave_activate_after_install /usr/bin/emulationstation "$launcher" \
+        "$md_inst/.tarave-activate-after-install" || return 1
+}
+
+# Activating as the default is the normal result of installing Tarave,
+# just as installing ES-X makes it the selected RetroPie frontend.
+# Explicit side-by-side installs remain supported; a later "configure" does
+# not undo a user's decision to restore ES-X or classic EmulationStation.
+function _tarave_activate_after_install() {
+    local entry="$1"
+    local launcher="$2"
+    local marker="$3"
+
+    if [[ ! -e "$marker" ]]; then
+        if _batocera_es_test_owns_entry "$entry"; then
+            echo "Tarave is already the active EmulationStation frontend."
+        else
+            echo "Tarave is installed; leaving the user's existing frontend selection unchanged."
+        fi
+        return 0
     fi
+
+    if [[ "${TARAVE_INSTALL_SIDE_BY_SIDE:-0}" == "1" ]] &&
+       ! _batocera_es_test_owns_entry "$entry"; then
+        echo "Tarave installed alongside existing EmulationStation (opt-out requested)."
+        rm -f -- "$marker"
+        return 0
+    fi
+
+    if ! _batocera_es_test_activate "$entry" "$launcher"; then
+        echo "Tarave installation completed but automatic activation failed." >&2
+        echo "The previous frontend was preserved; retry using the package's GUI." >&2
+        return 1
+    fi
+    rm -f -- "$marker" || return 1
 }
 
 function remove_batocera-es-test() {
