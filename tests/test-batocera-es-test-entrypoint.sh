@@ -49,4 +49,34 @@ if _batocera_es_test_activate "$original" "$next"; then
 fi
 [[ "$("$original")" == foreign ]]
 [[ "$("$original.batocera-es-test.previous")" == 'original:' ]]
+# A source install (marker created by install()) makes Tarave the main
+# frontend by default. Running Configure after the user restores ES does not.
+fresh="$temp/main-emulationstation"
+marker="$temp/.tarave-activate-after-install"
+cat > "$fresh" <<'CLASSIC'
+#!/usr/bin/env bash
+printf 'classic:%s\n' "$*"
+CLASSIC
+chmod +x "$fresh"
+_tarave_activate_after_install "$fresh" "$next" "$marker"
+[[ "$("$fresh" old)" == 'classic:old' ]]
+touch "$marker"
+_tarave_activate_after_install "$fresh" "$next" "$marker"
+[[ "$("$fresh" new)" == 'next:new' ]]
+[[ "$("$fresh.batocera-es-test.previous" old)" == 'classic:old' ]]
+[[ ! -e "$marker" ]]
+# Reinstallation of an already managed entrypoint is idempotent.
+touch "$marker"
+_tarave_activate_after_install "$fresh" "$next" "$marker"
+[[ "$("$fresh.batocera-es-test.previous" old)" == 'classic:old' ]]
+_batocera_es_test_restore "$fresh"
+[[ "$("$fresh" restored)" == 'classic:restored' ]]
+_tarave_activate_after_install "$fresh" "$next" "$marker"
+[[ "$("$fresh" unchanged)" == 'classic:unchanged' ]]
+# Explicit side-by-side source installation does not take over ES.
+touch "$marker"
+TARAVE_INSTALL_SIDE_BY_SIDE=1 _tarave_activate_after_install "$fresh" "$next" "$marker"
+[[ "$("$fresh" optout)" == 'classic:optout' ]]
+[[ ! -e "$marker" && ! -e "$fresh.batocera-es-test.previous" ]]
+
 echo 'PASS: RetroPie entrypoint backup, quoted arguments and rollback'
