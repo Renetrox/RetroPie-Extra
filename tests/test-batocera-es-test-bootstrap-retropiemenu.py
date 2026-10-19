@@ -28,7 +28,7 @@ class FreshRetroPieMenuTests(unittest.TestCase):
         (self.icons / "rpsetup.png").write_bytes(b"PNG fixture")
         self.gamelist = self.private / ".emulationstation/gamelists/retropie/gamelist.xml"
         self.overlay = self.private / ".emulationstation/es_systems_legacy_import.cfg"
-        self.menu = self.private / "retropiemenu"
+        self.menu = self.private / ".emulationstation/retropiemenu"
 
     def test_fresh_install_creates_independent_menu_xml_icons_and_system(self):
         setup_bytes = (self.setup / "retropie_packages.sh").read_bytes()
@@ -59,7 +59,7 @@ class FreshRetroPieMenuTests(unittest.TestCase):
         self.assertEqual(app.main(self.home, self.private, self.setup), (0, 0))
         self.assertEqual(self.gamelist.read_bytes(), prev)
 
-    def test_existing_retropie_menu_copies_old_assets_and_keeps_private_edits(self):
+    def test_existing_retropie_menu_reused_without_duplicate_and_keeps_private_edits(self):
         old_menu = self.home / "RetroPie/retropiemenu"
         old_menu.mkdir(parents=True)
         (old_menu / "rpsetup.rp").touch()
@@ -85,14 +85,14 @@ class FreshRetroPieMenuTests(unittest.TestCase):
                           ET.parse(self.overlay).getroot().findall("system")],
                          ["wine", "retropie"])
         self.assertEqual((old_menu / "rpsetup.rp").read_bytes(), snap)
-        self.assertEqual((self.menu / "custom.sh").read_bytes(),
-                         (old_menu / "custom.sh").read_bytes())
-        self.assertTrue((self.menu / "custom.sh").stat().st_mode & 0o111)
-        self.assertEqual((self.menu / "icons/custom.png").read_bytes(),
+        # No second ROM/menu folder is created for existing RetroPie.
+        self.assertFalse(self.menu.exists())
+        self.assertTrue((old_menu / "custom.sh").stat().st_mode & 0o111)
+        self.assertEqual((old_menu / "icons/custom.png").read_bytes(),
                          b"custom icon")
         retro = next(x for x in ET.parse(self.overlay).getroot().findall("system")
                      if x.findtext("name") == "retropie")
-        self.assertEqual(retro.findtext("path"), str(self.menu))
+        self.assertEqual(retro.findtext("path"), str(old_menu))
 
     def test_incomplete_prior_private_retropie_is_safely_completed(self):
         self.overlay.parent.mkdir(parents=True)
@@ -121,7 +121,8 @@ class FreshRetroPieMenuTests(unittest.TestCase):
         external = self.home / "outside"
         external.mkdir()
         self.private.mkdir(parents=True)
-        (self.private / "retropiemenu").symlink_to(external)
+        (self.private / ".emulationstation").mkdir()
+        (self.private / ".emulationstation/retropiemenu").symlink_to(external)
         with self.assertRaises(ValueError):
             app.main(self.home, self.private, self.setup)
         self.assertEqual(list(external.iterdir()), [])
