@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Initialize RetroPie-Setup shortcuts inside a *new* private Tarave home.
+"""Provide a private Tarave RetroPie gamelist using the real RetroPie menu.
 
-RetroPie-Setup's configure_retropiemenu() normally creates .rp files, icons
-and metadata in the shared RetroPie/EmulationStation directories. Calling it
-would mutate the older frontend's files. Tarave mirrors that layout in its
-own directories; preserve previous custom menu entries by copying their
-resources, then create missing placeholders, icons and gamelist entries.
-Register the RetroPie system in Tarave's private overlay, pointing to
-Tarave's own retropiemenu folder.
-No ROMs, binaries, old gamelists, or ES-X configuration are modified.
+EmulationStation classic stores .rp launchers under ~/RetroPie/retropiemenu,
+not alongside gamelist.xml. Tarave uses that same installed menu if present.
+Only on a truly new setup without a shared RetroPie menu does Tarave create
+its own fallback shortcuts under <Tarave home>/.emulationstation/retropiemenu.
+In every case, the gamelist and any overlay stay within Tarave's own --home.
+Never copy/overwrite or modify the original RetroPie .rp files or icons.
 """
 import argparse
 import os
@@ -84,32 +82,6 @@ def save_xml(path, document):
         if tempname and os.path.exists(tempname):
             os.unlink(tempname)
 
-def copy_previous_menu(source, destination, anchor):
-    """Copy prior RetroPie menu content, preserving scripts, icons and extras.
-
-    Never follow symlinks and never overwrite Tarave's copies. ES-X's menu
-    remains at its original location; only ordinary files are duplicated.
-    """
-    source = Path(source)
-    if not source.is_dir() or source.is_symlink():
-        return 0
-    copied = 0
-    for parent, dirs, filenames in os.walk(source, followlinks=False):
-        old_parent = Path(parent)
-        dirs[:] = [d for d in dirs if not (old_parent / d).is_symlink()]
-        new_parent = destination / old_parent.relative_to(source)
-        secure_dir(new_parent, anchor)
-        for filename in filenames:
-            old_file = old_parent / filename
-            if not old_file.is_file() or old_file.is_symlink():
-                continue
-            new_file = new_parent / filename
-            if unique_file(new_file, old_file.read_bytes()):
-                os.chmod(new_file, old_file.stat().st_mode & 0o777)
-                copied += 1
-    return copied
-
-
 def main(home, target_home, setup):
     home = Path(home)
     target_home = Path(target_home)
@@ -121,29 +93,30 @@ def main(home, target_home, setup):
 
     cfg = target_home / ".emulationstation"
     gamelist = cfg / "gamelists/retropie/gamelist.xml"
-    menu_dir = target_home / "retropiemenu"
+    shared_menu = home / "RetroPie/retropiemenu"
+    has_shared_menu = (shared_menu / "rpsetup.rp").is_file()
+    # Installed RetroPie tools remain shared with ES-X. Only a genuinely new
+    # setup needs private .rp placeholders; put those beneath .emulationstation
+    # (NOT directly in ~/.local/share/batocera-es-test/).
+    menu_dir = shared_menu if has_shared_menu else cfg / "retropiemenu"
     icon_dir = menu_dir / "icons"
     overlay = cfg / "es_systems_legacy_import.cfg"
-    shared_menu = home / "RetroPie/retropiemenu"
-    for directory in (cfg, gamelist.parent, menu_dir, icon_dir):
+    for directory in (cfg, gamelist.parent):
         secure_dir(directory, target_home)
 
-    copied = copy_previous_menu(shared_menu, menu_dir, target_home)
-    if copied:
-        print(f"Tarave: copied {copied} pre-existing RetroPie menu assets "
-              "into its private directory, without editing the originals.")
-
-    # Always stage private launchable shortcuts and icon files, but do not
-    # replace anything saved by Tarave or another migration.
-    icon_source = setup / "scriptmodules/supplementary/retropiemenu/icons"
     count_shortcuts = 0
-    for identifier, _, _ in MENU:
-        if unique_file(menu_dir / (identifier + ".rp"), b""):
-            count_shortcuts += 1
-        src_icon = icon_source / (identifier + ".png")
-        dst_icon = icon_dir / (identifier + ".png")
-        if src_icon.is_file() and not src_icon.is_symlink() and not dst_icon.exists() and not dst_icon.is_symlink():
-            unique_file(dst_icon, src_icon.read_bytes())
+    if not has_shared_menu:
+        for directory in (menu_dir, icon_dir):
+            secure_dir(directory, target_home)
+        icon_source = setup / "scriptmodules/supplementary/retropiemenu/icons"
+        for identifier, _, _ in MENU:
+            if unique_file(menu_dir / (identifier + ".rp"), b""):
+                count_shortcuts += 1
+            src_icon = icon_source / (identifier + ".png")
+            dst_icon = icon_dir / (identifier + ".png")
+            if (src_icon.is_file() and not src_icon.is_symlink() and
+                    not dst_icon.exists() and not dst_icon.is_symlink()):
+                unique_file(dst_icon, src_icon.read_bytes())
 
     if gamelist.is_symlink():
         raise ValueError(f"Private gamelist is a symlink: {gamelist}")
@@ -155,6 +128,9 @@ def main(home, target_home, setup):
     added = 0
     for identifier, name, description in MENU:
         rom = identifier + ".rp"
+        # On existing RetroPie installs only display real, working .rp files.
+        if not (menu_dir / rom).is_file():
+            continue
         if rom in existing:
             continue
         game = ET.SubElement(root, "game")
@@ -168,11 +144,10 @@ def main(home, target_home, setup):
     if added or not gamelist.exists():
         save_xml(gamelist, root)
 
-    # Match classic EmulationStation, except Tarave's RetroPie system always
-    # uses the private retropiemenu path, including for existing installations
-    # whose custom .rp/.sh assets were copied above. The command still invokes
-    # the real RetroPie-Setup module, not a separate/duplicated RetroPie.
-    # Preserve any deliberately customized private 'retropie' definition.
+    # The core RetroPie menu remains at ~/RetroPie/retropiemenu if installed,
+    # just as EmulationStation classic expects. Only a clean-install fallback
+    # uses Tarave's own .emulationstation/retropiemenu directory.
+    # Preserve any pre-existing private 'retropie' definition.
     if overlay.is_symlink():
         raise ValueError(f"Private system overlay is a symlink: {overlay}")
     doc = ET.parse(overlay).getroot() if overlay.exists() else ET.Element("systemList")
