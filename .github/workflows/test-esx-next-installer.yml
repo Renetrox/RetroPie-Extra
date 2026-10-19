@@ -8,6 +8,8 @@ on:
       - 'scriptmodules/supplementary/batocera-es-test.sh'
       - 'tests/test-batocera-es-test-entrypoint.sh'
       - 'tests/test-batocera-es-test-package.sh'
+      - 'tests/test-batocera-es-test-gamelist.py'
+      - 'scriptmodules/supplementary/batocera-es-test/**'
       - '.github/workflows/test-esx-next-installer.yml'
   workflow_dispatch:
 
@@ -22,6 +24,8 @@ jobs:
         run: bash tests/test-batocera-es-test-entrypoint.sh
       - name: Installed resources and private default theme
         run: bash tests/test-batocera-es-test-package.sh
+      - name: RetroPie Setup menu metadata isolation and safe merges
+        run: python3 -m unittest discover -s tests -p test-batocera-es-test-gamelist.py -v
       - name: Guard isolated DRM/KMS console test
         run: |
           grep -q -- '--tty-test' scriptmodules/supplementary/batocera-es-test.sh
