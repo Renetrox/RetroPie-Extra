@@ -13,7 +13,7 @@
 
 rp_module_id="batocera-es-test"
 rp_module_desc="ES-X Next (Tarave) - standalone RetroPie frontend with optional reversible switch"
-rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
+rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls alongside ES-X by default. Its configuration, music and themes remain private.\nChoose Activate as Default in this package's GUI if desired; the previous launcher is backed up for rollback.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
@@ -228,6 +228,48 @@ function _tarave_seed_default_theme() {
     cp -a -- "$source" "$dest" || return 1
     chown -R "$__user:$__group" "$dest" || return 1
     echo "Installed small offline fallback theme in Tarave private data."
+}
+
+# Expose the known-working RetroPie-Setup source installer as its own
+# interactive terminal command and desktop launcher. Do not route this through
+# setup.sh's dialog/gzip log pipeline, which may stall when launched from an ES.
+function _tarave_direct_installer() {
+    local source="$md_data/install-direct.sh"
+    local installed="$md_inst/install-direct.sh"
+    local launcher="/usr/local/bin/tarave-install"
+    local desktop="/usr/local/share/applications/tarave-install.desktop"
+
+    [[ -f "$source" ]] || { echo "Missing Tarave direct installer: $source" >&2; return 1; }
+    install -m 755 -- "$source" "$installed" || return 1
+    mkdir -p "$(dirname "$launcher")" || return 1
+    if [[ -e "$launcher" || -L "$launcher" ]]; then
+        if [[ ! -L "$launcher" || "$(readlink "$launcher")" != "$installed" ]]; then
+            echo "Refusing to replace unrelated $launcher" >&2
+            return 1
+        fi
+    fi
+    ln -sfn -- "$installed" "$launcher" || return 1
+
+    if isPlatform "x11"; then
+        if [[ -e "$desktop" ]] &&
+           ! grep -Fqx '# TARAVE_DIRECT_INSTALL_MANAGED=1' "$desktop"; then
+            echo "Refusing to replace unrelated desktop entry: $desktop" >&2
+            return 1
+        fi
+        cat > "$desktop" <<EOF
+[Desktop Entry]
+# TARAVE_DIRECT_INSTALL_MANAGED=1
+Type=Application
+Name=Install or update Tarave
+Comment=Install from source in a real terminal and show progress
+Exec=$launcher
+TryExec=$launcher
+Icon=$md_inst/resources/window_icon_256.png
+Terminal=true
+Categories=Game;System;
+EOF
+        chmod 644 "$desktop" || return 1
+    fi
 }
 
 # Keep the graphical shortcut distinct from RetroPie's existing desktop file.
@@ -530,6 +572,7 @@ LAUNCHER
     if isPlatform "x11"; then
         _tarave_desktop_entry || return 1
     fi
+    _tarave_direct_installer || return 1
 
     # ES-X is the user's preferred frontend. Installing/testing Next must
     # NOT switch the default automatically. A user-requested switch, or an
@@ -557,6 +600,16 @@ function remove_batocera-es-test() {
     local desktop="/usr/local/share/applications/tarave-es-next.desktop"
     if [[ -f "$desktop" ]] && grep -Fqx '# TARAVE_ES_NEXT_MANAGED=1' "$desktop"; then
         rm -f -- "$desktop"
+    fi
+    local direct_launcher="/usr/local/bin/tarave-install"
+    local direct_installed="$md_inst/install-direct.sh"
+    if [[ -L "$direct_launcher" && "$(readlink "$direct_launcher")" == "$direct_installed" ]]; then
+        rm -f -- "$direct_launcher"
+    fi
+    local direct_desktop="/usr/local/share/applications/tarave-install.desktop"
+    if [[ -f "$direct_desktop" ]] &&
+       grep -Fqx '# TARAVE_DIRECT_INSTALL_MANAGED=1' "$direct_desktop"; then
+        rm -f -- "$direct_desktop"
     fi
 
     # Preserve ALL per-user Tarave/ES-X data, themes, input maps, ROMs and
