@@ -15,7 +15,7 @@ rp_module_id="batocera-es-test"
 rp_module_desc="Tarave - independent RetroPie frontend with safe automatic activation"
 rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls its own frontend and becomes RetroPie's default after install, keeping classic EmulationStation/ES-X available for rollback.\nSettings, music and themes remain private. Set TARAVE_INSTALL_SIDE_BY_SIDE=1 to install without changing the default.\nThe previous /usr/bin/emulationstation launcher is saved and can be restored using this package's GUI.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nInitialize isolated RetroPie menu: batocera-es-test --initialize-retropie-menu\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
-rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
+rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/tarave-xtras-20261021"
 rp_module_section="exp"
 rp_module_flags=""
 
