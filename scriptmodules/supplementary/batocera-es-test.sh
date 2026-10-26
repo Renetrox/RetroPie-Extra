@@ -13,7 +13,7 @@
 
 rp_module_id="batocera-es-test"
 rp_module_desc="Tarave - independent RetroPie frontend with safe automatic activation"
-rp_module_help="ES-X Next (Tarave) for RetroPie.\n\nInstalls its own frontend and becomes RetroPie's default after install, keeping classic EmulationStation/ES-X available for rollback.\nSettings, music and themes remain private. Set TARAVE_INSTALL_SIDE_BY_SIDE=1 to install without changing the default.\nThe previous /usr/bin/emulationstation launcher is saved and can be restored using this package's GUI.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nInitialize isolated RetroPie menu: batocera-es-test --initialize-retropie-menu\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
+rp_module_help="Tarave for RetroPie.\n\nInstalls its own frontend and becomes RetroPie's default after install, keeping classic EmulationStation/ES-X available for rollback.\nSettings, music and themes remain private. Set TARAVE_INSTALL_SIDE_BY_SIDE=1 to install without changing the default.\nThe previous /usr/bin/emulationstation launcher is saved and can be restored using this package's GUI.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nInitialize isolated RetroPie menu: batocera-es-test --initialize-retropie-menu\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
@@ -113,18 +113,15 @@ function _batocera_es_test_activate() {
     local backup="${entry}.batocera-es-test.previous"
 
     if [[ ! -x "$command" ]]; then
-        echo "ES-X Next entrypoint unavailable: $command" >&2
+        echo "Tarave entrypoint unavailable: $command" >&2
         return 1
     fi
 
-    # Do not overwrite a launcher that another installer has since taken over.
-    if [[ ( -e "$backup" || -L "$backup" ) ]] && ! _batocera_es_test_owns_entry "$entry"; then
-        echo "Existing backup at $backup, but $entry belongs to another frontend." >&2
-        echo "Leaving both unchanged. Restore/remove that launcher before switching." >&2
-        return 1
-    fi
-
-    local tmp moved_original=0
+    # A newer ES or ES-X install may have replaced Tarave's managed launcher
+    # while the previous-backup still exists. On an explicit Tarave reinstall,
+    # the frontend that is active NOW must become the rollback target. Preserve
+    # the older backup separately instead of clobbering it or refusing install.
+    local tmp moved_original=0 archived_previous=""
     tmp="$(mktemp "${entry}.batocera-es-test.XXXXXX")" || return 1
     {
         printf '#!/usr/bin/env bash\n'
@@ -161,27 +158,54 @@ WRAPPER
         return 1
     fi
 
-    if ! _batocera_es_test_owns_entry "$entry" && [[ -e "$entry" || -L "$entry" ]]; then
-        if ! mv -T -- "$entry" "$backup"; then
-            rm -f "$tmp"
-            echo "Could not preserve existing EmulationStation launcher." >&2
-            return 1
+    if ! _batocera_es_test_owns_entry "$entry"; then
+        if [[ -e "$entry" || -L "$entry" ]]; then
+            if [[ -e "$backup" || -L "$backup" ]]; then
+                # mktemp reserves a collision-free archival name. Retain it on
+                # success for manual rollback of an even earlier frontend.
+                archived_previous="$(mktemp "${backup}.archived.XXXXXXXX")" || {
+                    rm -f -- "$tmp"
+                    return 1
+                }
+                if ! mv -fT -- "$backup" "$archived_previous"; then
+                    rm -f -- "$tmp" "$archived_previous"
+                    echo "Could not archive an earlier frontend backup." >&2
+                    return 1
+                fi
+            fi
+            if ! mv -T -- "$entry" "$backup"; then
+                rm -f -- "$tmp"
+                if [[ -n "$archived_previous" ]]; then
+                    mv -fT -- "$archived_previous" "$backup" ||
+                        echo "Restore previous backup manually: $archived_previous" >&2
+                fi
+                echo "Could not preserve existing EmulationStation launcher." >&2
+                return 1
+            fi
+            moved_original=1
         fi
-        moved_original=1
     fi
 
     if ! mv -fT -- "$tmp" "$entry"; then
-        rm -f "$tmp"
+        rm -f -- "$tmp"
         if (( moved_original )); then
-            mv -T -- "$backup" "$entry" || true
+            mv -T -- "$backup" "$entry" ||
+                echo "Restore active frontend manually: $backup" >&2
         fi
-        echo "Could not enable ES-X Next launcher." >&2
+        if [[ -n "$archived_previous" ]]; then
+            mv -fT -- "$archived_previous" "$backup" ||
+                echo "Restore older backup manually: $archived_previous" >&2
+        fi
+        echo "Could not enable Tarave launcher." >&2
         return 1
     fi
 
-    echo "ES-X Next is now the active EmulationStation frontend: $entry"
+    echo "Tarave is now the active EmulationStation frontend: $entry"
     if [[ -e "$backup" || -L "$backup" ]]; then
-        echo "Previous launcher saved at: $backup"
+        echo "Previously active frontend saved at: $backup"
+    fi
+    if [[ -n "$archived_previous" ]]; then
+        echo "An older frontend backup was preserved at: $archived_previous"
     fi
 }
 
