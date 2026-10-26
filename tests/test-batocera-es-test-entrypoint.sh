@@ -36,19 +36,39 @@ tty_fallback="$(env -u DISPLAY -u WAYLAND_DISPLAY MOCK_KMS_FAIL=1 PATH="$temp:$P
 _batocera_es_test_restore "$original"
 [[ "$("$original" 'hello world')" == 'original:hello world' ]]
 [[ ! -e "$original.batocera-es-test.previous" ]]
-# Never change a new command owned by another installer.
+# ES-X may be reinstalled while Tarave's former backup still exists.
+# Reinstalling Tarave must pick the CURRENT active frontend for rollback and
+# archive the even older backup, never overwrite/delete unrelated binaries.
 _batocera_es_test_activate "$original" "$next"
 cat > "$original" <<'FOREIGN'
 #!/usr/bin/env bash
-echo foreign
+echo es-x
 FOREIGN
 chmod 755 "$original"
-if _batocera_es_test_activate "$original" "$next"; then
-    echo 'ERROR: overwrote an entrypoint owned by another frontend' >&2
-    exit 1
-fi
-[[ "$("$original")" == foreign ]]
-[[ "$("$original.batocera-es-test.previous")" == 'original:' ]]
+_batocera_es_test_activate "$original" "$next"
+[[ "$("$original")" == 'next:' ]]
+[[ "$("$original.batocera-es-test.previous")" == 'es-x' ]]
+archived=( "$original".batocera-es-test.previous.archived.* )
+[[ "${#archived[@]}" -eq 1 && -f "${archived[0]}" ]]
+[[ "$("${archived[0]}")" == 'original:' ]]
+_batocera_es_test_restore "$original"
+[[ "$("$original")" == 'es-x' ]]
+[[ ! -e "$original.batocera-es-test.previous" ]]
+[[ "$("${archived[0]}")" == 'original:' ]]
+
+# A symlink to either ES or ES-X is a valid existing RetroPie entrypoint.
+# Restore the *same* symlink after removing Tarave.
+other="$temp/esx"
+printf '#!/usr/bin/env bash\necho symlink-esx\n' > "$other"
+chmod +x "$other"
+ln -s "$other" "$temp/symlink-emulationstation"
+link="$temp/symlink-emulationstation"
+_batocera_es_test_activate "$link" "$next"
+[[ "$("$link")" == 'next:' ]]
+[[ -L "$link.batocera-es-test.previous" ]]
+_batocera_es_test_restore "$link"
+[[ -L "$link" && "$(readlink "$link")" == "$other" ]]
+[[ "$("$link")" == 'symlink-esx' ]]
 # A source install (marker created by install()) makes Tarave the main
 # frontend by default. Running Configure after the user restores ES does not.
 fresh="$temp/main-emulationstation"
