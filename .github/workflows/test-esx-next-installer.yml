@@ -8,6 +8,7 @@ on:
       - 'scriptmodules/supplementary/batocera-es-test.sh'
       - 'scriptmodules/supplementary/emulationstation-es-x.sh'
       - 'tests/test-batocera-es-test-entrypoint.sh'
+      - 'tests/test-batocera-es-test-autostart.sh'
       - 'tests/test-batocera-es-test-package.sh'
       - 'tests/test-batocera-es-test-install-direct.sh'
       - 'tests/test-batocera-es-test-classic-compat.sh'
@@ -26,6 +27,8 @@ jobs:
         run: bash -n scriptmodules/supplementary/batocera-es-test.sh
       - name: Exclusive frontend takeover, uninstall and preserved user data
         run: bash tests/test-batocera-es-test-entrypoint.sh
+      - name: Autostart after reboot, LightDM login and RetroPie TTY integration
+        run: bash tests/test-batocera-es-test-autostart.sh
       - name: Working CLI source-installer with actual PTY
         run: bash tests/test-batocera-es-test-install-direct.sh
       - name: Classic EmulationStation system catalog migration
