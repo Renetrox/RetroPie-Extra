@@ -57,6 +57,44 @@ An already-installed Tarave has an explicit **Tarave management →
 Activate Tarave and uninstall classic ES / ES-X packages** GUI action,
 which shows a confirmation dialog before removing other installed frontends.
 
+## Expected reboot / auto-start behavior
+
+On a normal successful Tarave source install, installing the executable is
+**not** the whole job: the installed module also configures a boot path.
+
+- **Debian XFCE, X11, and other graphical desktops:** install a managed
+  `~/.config/autostart/tarave.desktop` that runs
+  `/usr/local/bin/batocera-es-test`. Unlink only RetroPie's known old
+  `retropie.desktop` autostart symlink if present, preventing duplicate or
+  broken startup entries after classic ES is removed.
+- **LightDM-based graphical systems:** additionally install the managed
+  `/etc/lightdm/lightdm.conf.d/90-tarave-autologin.conf` drop-in, so
+  the target RetroPie user enters their desktop session without requiring
+  keyboard login. **This changes the host's login policy:** automatic login
+  grants physical-console access to that user. The drop-in is removed on
+  Tarave uninstall, but existing unrelated LightDM configurations are
+  never overwritten.
+- **Graphical systems with GDM/SDDM/other display managers:** preserve
+  the existing login policy. Tarave will autostart after a user logs into
+  the desktop; enable that display manager's own auto-login separately
+  for fully unattended boot. The installer prints this limitation.
+- **Console/TTY-only RetroPie:** use RetroPie-Setup's existing
+  `enable_autostart es` logic for tty1 and keep its normal
+  `emulationstation #auto` command; Tarave owns
+  `/usr/bin/emulationstation`. This route requires a functional
+  SDL DRM/KMS/EGL driver; **do not force the console route on X11-based
+  Orange Pi systems**, where EGL may be unavailable on TTY.
+
+**No extra systemd Tarave service** runs in parallel with RetroPie, and the
+installer never calls `reboot` automatically. Users can reboot after a
+successful install. In an unsupported display-manager environment, it must
+not claim fully unattended boot until auto-login is configured.
+
+The direct helper `tarave-install` honors
+`TARAVE_BOOT_AUTOSTART=0` to skip boot changes and
+`TARAVE_BOOT_AUTOLOGIN=0` to retain the existing desktop-login policy.
+For the standard installation both default to enabled where supported.
+
 ## Regression checks
 
 The repository's installer workflow validates Bash syntax, isolated
