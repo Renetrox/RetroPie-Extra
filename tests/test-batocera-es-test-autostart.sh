@@ -4,6 +4,8 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 sandbox="$(mktemp -d)"
 trap 'rm -rf -- "$sandbox"' EXIT
+# RetroPie-Setup normally exports home before sourcing its modules.
+home="$HOME"
 source "$root/scriptmodules/supplementary/batocera-es-test.sh"
 __user="$(id -un)"
 __group="$(id -gn)"
@@ -22,7 +24,7 @@ target="$home/.config/autostart/tarave.desktop"
 [[ -f "$target" ]]
 grep -Fqx '# TARAVE_BOOT_AUTOSTART_MANAGED=1' "$target"
 grep -Fqx "Exec=$launcher" "$target"
-[[ ! -e "$home/.config/autostart/retropie.desktop" ]]
+[[ ! -L "$home/.config/autostart/retropie.desktop" ]]
 # Reinstall is idempotent.
 _tarave_enable_desktop_autostart "$home" "$__user" "$__group" "$launcher"
 
