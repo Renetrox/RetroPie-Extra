@@ -927,6 +927,7 @@ function gui_batocera-es-test() {
                            rm -f -- "$archived" || return 1
                        fi
                    done
+                   _tarave_configure_boot "$launcher" || return 1
                fi
                break ;;
             2) echo "Use batocera-es-test --tty-test from a physical text console."; break ;;
