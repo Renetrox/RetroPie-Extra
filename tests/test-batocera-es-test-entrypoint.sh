@@ -24,15 +24,17 @@ _batocera_es_test_activate "$original" "$next"
 # A second install/configure must be idempotent and preserve the prior binary.
 _batocera_es_test_activate "$original" "$next"
 [[ "$("$original.batocera-es-test.previous" 'old')" == 'original:old' ]]
-# Simulate a physical TTY and a failed KMS/DRM EGL context. The previous
-# frontend must be launched rather than leaving the RetroPie boot blank.
+# Simulate a physical TTY and failed KMS/DRM EGL context. Exclusive
+# mode must report the Tarave failure, not run an uninstalled ES executable.
 cat > "$temp/tty" <<'FAKETTY'
 #!/usr/bin/env bash
 echo /dev/tty3
 FAKETTY
 chmod 755 "$temp/tty"
-tty_fallback="$(env -u DISPLAY -u WAYLAND_DISPLAY MOCK_KMS_FAIL=1 PATH="$temp:$PATH" "$original" 'back up')"
-[[ "$tty_fallback" == 'original:back up' ]]
+tty_status=0
+env -u DISPLAY -u WAYLAND_DISPLAY MOCK_KMS_FAIL=1 PATH="$temp:$PATH" \
+    "$original" 'back up' >/dev/null 2>&1 || tty_status=$?
+[[ "$tty_status" -eq 42 ]]
 _batocera_es_test_restore "$original"
 [[ "$("$original" 'hello world')" == 'original:hello world' ]]
 [[ ! -e "$original.batocera-es-test.previous" ]]
