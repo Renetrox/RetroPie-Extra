@@ -729,18 +729,34 @@ function _tarave_activate_after_install() {
         return 0
     fi
 
-    if [[ "${TARAVE_INSTALL_SIDE_BY_SIDE:-0}" == "1" ]] &&
-       ! _batocera_es_test_owns_entry "$entry"; then
-        echo "Tarave installed alongside existing EmulationStation (opt-out requested)."
-        rm -f -- "$marker"
-        return 0
+    # The new Tarave executable is already built and installed at this point.
+    # Remove old frontend packages through the registered RetroPie-Setup
+    # module hooks, without deleting shared RetroPie or per-user data.
+    # Some removal hooks clear /usr/bin/emulationstation; re-create Tarave's
+    # launcher immediately afterwards, even when an old package fails removal.
+    local cleanup_ok=1
+    if ! _tarave_remove_competing_frontends; then
+        cleanup_ok=0
+        echo "Warning: an older frontend could not be fully uninstalled." >&2
     fi
-
     if ! _batocera_es_test_activate "$entry" "$launcher"; then
-        echo "Tarave installation completed but automatic activation failed." >&2
-        echo "The previous frontend was preserved; retry using the package's GUI." >&2
+        echo "Tarave installation completed but activation failed." >&2
         return 1
     fi
+    (( cleanup_ok )) || return 1
+
+    # Previous launcher wrappers are no longer useful: those programs were
+    # removed. Discard only backups bearing Tarave's own managed suffix.
+    local backup="${entry}.batocera-es-test.previous"
+    local archive
+    if [[ -f "$backup" || -L "$backup" ]]; then
+        rm -f -- "$backup" || return 1
+    fi
+    for archive in "${backup}".archived.*; do
+        if [[ -f "$archive" || -L "$archive" ]]; then
+            rm -f -- "$archive" || return 1
+        fi
+    done
     rm -f -- "$marker" || return 1
 }
 
