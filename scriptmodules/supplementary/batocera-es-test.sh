@@ -324,6 +324,121 @@ EOF
     chmod 644 "$desktop"
 }
 
+# Autostart is part of a finished frontend installation. On desktop systems
+# use the user's native XDG autostart (not classic ES's now-removed retropie
+# desktop entry). On console-only RetroPie reuse its supported tty1 boot hook.
+# Never switch an X11 machine to DRM/TTY, which is not guaranteed on ARM SBCs.
+function _tarave_enable_desktop_autostart() {
+    local userhome="$1"
+    local owner="$2"
+    local group="$3"
+    local launcher="$4"
+    local dest="$userhome/.config/autostart/tarave.desktop"
+    local former="$userhome/.config/autostart/retropie.desktop"
+    local old_target="/usr/local/share/applications/retropie.desktop"
+
+    [[ -x "$launcher" ]] || {
+        echo "Tarave launcher not installed: $launcher" >&2
+        return 1
+    }
+    # Never overwrite a user-customized desktop autostart.
+    if [[ ( -e "$dest" || -L "$dest" ) ]] &&
+       { [[ -L "$dest" ]] ||
+         ! grep -Fqx '# TARAVE_BOOT_AUTOSTART_MANAGED=1' "$dest"; }; then
+        echo "Existing non-Tarave autostart file at $dest; leaving it unchanged." >&2
+        return 1
+    fi
+
+    mkdir -p "$userhome/.config/autostart" || return 1
+    chown "$owner:$group" "$userhome/.config" "$userhome/.config/autostart" || return 1
+    # The old official shortcut points at a desktop file uninstalled with
+    # classic ES. Remove ONLY that exact symlink so Tarave starts once.
+    if [[ -L "$former" && "$(readlink "$former")" == "$old_target" ]]; then
+        rm -f -- "$former" || return 1
+    fi
+    cat > "$dest" <<EOF
+[Desktop Entry]
+# TARAVE_BOOT_AUTOSTART_MANAGED=1
+Type=Application
+Name=Tarave
+Comment=Start the RetroPie Tarave frontend after graphical login
+Exec=$launcher
+TryExec=$launcher
+Terminal=false
+X-GNOME-Autostart-enabled=true
+EOF
+    chown "$owner:$group" "$dest" || return 1
+    chmod 644 "$dest" || return 1
+    echo "Tarave will launch automatically when the desktop session starts."
+}
+
+function _tarave_enable_lightdm_autologin() {
+    local owner="$1"
+    local hint="${2:-/etc/X11/default-display-manager}"
+    local confdir="${3:-/etc/lightdm/lightdm.conf.d}"
+    local file="$confdir/90-tarave-autologin.conf"
+
+    # Do not change a different display manager or an unrelated file.
+    if [[ ! -r "$hint" ]] || ! grep -Eq '(^|/)lightdm([[:space:]]|$)' "$hint"; then
+        echo "Desktop auto-login not configured: this display manager is not LightDM."
+        return 0
+    fi
+    if [[ -e "$file" ]] &&
+       ! grep -Fqx '# TARAVE_LIGHTDM_AUTOLOGIN_MANAGED=1' "$file"; then
+        echo "Existing LightDM configuration at $file; leaving it unchanged." >&2
+        return 1
+    fi
+    mkdir -p "$confdir" || return 1
+    cat > "$file" <<EOF
+# TARAVE_LIGHTDM_AUTOLOGIN_MANAGED=1
+[Seat:*]
+autologin-user=$owner
+autologin-user-timeout=0
+EOF
+    chmod 644 "$file" || return 1
+    echo "LightDM will auto-login $owner and start Tarave after boot."
+}
+
+function _tarave_configure_boot() {
+    local launcher="$1"
+    if [[ "${TARAVE_BOOT_AUTOSTART:-1}" == "0" ]]; then
+        echo "Tarave automatic start disabled explicitly (TARAVE_BOOT_AUTOSTART=0)."
+        return 0
+    fi
+
+    if isPlatform "x11"; then
+        _tarave_enable_desktop_autostart "$home" "$__user" "$__group" "$launcher" ||
+            return 1
+        # LightDM is common on Debian XFCE. For GDM/SDDM, preserve the
+        # existing login policy and explain the limitation to the installer.
+        if [[ "${TARAVE_BOOT_AUTOLOGIN:-1}" != "0" ]]; then
+            _tarave_enable_lightdm_autologin "$__user" || return 1
+        fi
+    elif declare -F enable_autostart >/dev/null 2>&1; then
+        # RetroPie-Setup's own autostart module configures tty1 auto-login
+        # and /etc/profile.d/10-retropie.sh to launch 'emulationstation'.
+        # /usr/bin/emulationstation is already Tarave's managed launcher.
+        enable_autostart es || return 1
+        echo "RetroPie tty1 autostart enabled for Tarave."
+    else
+        echo "WARNING: no RetroPie tty autostart helper; configure boot in RetroPie-Setup." >&2
+        return 1
+    fi
+}
+
+function _tarave_remove_managed_desktop_boot() {
+    local dest="$home/.config/autostart/tarave.desktop"
+    local lightdm="/etc/lightdm/lightdm.conf.d/90-tarave-autologin.conf"
+    if [[ -f "$dest" ]] &&
+       grep -Fqx '# TARAVE_BOOT_AUTOSTART_MANAGED=1' "$dest"; then
+        rm -f -- "$dest" || return 1
+    fi
+    if [[ -f "$lightdm" ]] &&
+       grep -Fqx '# TARAVE_LIGHTDM_AUTOLOGIN_MANAGED=1' "$lightdm"; then
+        rm -f -- "$lightdm" || return 1
+    fi
+}
+
 # Import the old full gamelists folder (including Wine, Kodi and Ports), then
 # refresh official RetroPie Setup menu entries. All destination files are in
 # Tarave's private --home; other frontend configurations stay untouched.
