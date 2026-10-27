@@ -96,6 +96,8 @@ rp_callModule() {
     # RetroPie's EmulationStation remove hook unlinks its shared entrypoint.
     rm -f -- "$fresh"
 }
+# No real boot settings may be modified in the isolated launcher test.
+_tarave_configure_boot() { printf '%s\n' "$1" >> "$temp/boot-configure"; }
 make_legacy_packages() {
     mkdir -p "$rootdir/supplementary/emulationstation" \
              "$rootdir/supplementary/emulationstation-es-x" \
@@ -131,6 +133,7 @@ _tarave_activate_after_install "$fresh" "$next" "$marker"
 [[ ! -f "$marker" ]]
 [[ "$(wc -l < "$temp/removed")" -eq 3 ]]
 [[ -f "$config" ]]
+[[ "$(wc -l < "$temp/boot-configure")" -eq 2 ]]
 
 # If ES-X gets installed again, the next Tarave source install takes over.
 make_legacy_packages
