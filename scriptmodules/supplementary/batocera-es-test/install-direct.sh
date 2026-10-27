@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Direct interactive Tarave installer. Uses the exact RetroPie-Setup _source_
 # route verified to work on Orange Pi, bypassing setup.sh's dialog/GUI logging.
-# Installs Tarave as the default RetroPie frontend, retaining the previous
-# ES/ES-X launcher for rollback. Supports opt-out via TARAVE_INSTALL_SIDE_BY_SIDE=1.
+# Installs Tarave as RetroPie's only frontend. After a successful source
+# build, other registered ES / ES-X packages are removed. User data is kept.
 # Requires the module to be registered in RetroPie-Setup.
 set -Eeuo pipefail
 
@@ -39,8 +39,8 @@ log="${TARAVE_INSTALL_LOG:-$HOME/tarave-install.log}"
 echo "Tarave: interactive install from RetroPie source (without dialog)"
 echo "RetroPie-Setup: $packages"
 echo "Complete log: $log"
-echo "Tarave becomes the default RetroPie frontend after installation."
-echo "The previous EmulationStation launcher is saved for rollback."
+echo "Tarave becomes the only RetroPie frontend after installation."
+echo "Older ES / ES-X program packages are removed; ROMs and configs are preserved."
 # Prompt before starting the tee pipeline so sudo's interactive password
 # exchange and the subsequent source build both use the original terminal.
 sudo -v || exit 1
@@ -48,8 +48,7 @@ sudo -v || exit 1
 # Unlike setup.sh's GUI route, stdout/stderr remain visible throughout CMake.
 # Do not redirect stdin: apt/sudo and terminal programs may require it.
 set +e
-sudo env TARAVE_INSTALL_SIDE_BY_SIDE="${TARAVE_INSTALL_SIDE_BY_SIDE:-0}" \
-    "$packages" batocera-es-test _source_ 2>&1 | tee "$log"
+sudo "$packages" batocera-es-test _source_ 2>&1 | tee "$log"
 result=${PIPESTATUS[0]}
 set -e
 if (( result == 0 )); then
