@@ -491,6 +491,10 @@ function esx_apply_default_settings() {
 # ------------------------------------------------------------
 
 function configure_emulationstation-es-x() {
+    # RetroPie-Setup invokes configure with md_mode=remove after deleting an
+    # older frontend. Do not reinstall ES-X themes, music, scraper files, or
+    # edit user preferences while Tarave is removing its predecessor.
+    [[ "$md_mode" == "remove" ]] && return 0
     echo "Configuring EmulationStation-X..."
 
     # Do NOT remove the original emulationstation module here.
