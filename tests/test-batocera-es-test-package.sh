@@ -48,6 +48,14 @@ echo '<theme>EXTERNAL</theme>' > "$private_cfg/themes/my-downloaded/theme.xml"
 _tarave_seed_default_theme "$private_cfg"
 [[ ! -e "$private_cfg/themes/tarave-minimal" ]]
 
+# Removing ES-X must not run its regular configure hook and re-install
+# themes/scraper assets or modify the shared user configuration.
+(
+    md_mode=remove
+    source "$root/scriptmodules/supplementary/emulationstation-es-x.sh"
+    configure_emulationstation-es-x
+)
+
 # No ES-X configuration directory is created as a side effect.
 [[ ! -e "$home/.emulationstation" ]]
 echo 'PASS: resources staged, offline theme only as needed, private data intact'
