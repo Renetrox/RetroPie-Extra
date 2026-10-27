@@ -854,10 +854,14 @@ function _tarave_activate_after_install() {
             rm -f -- "$archive" || return 1
         fi
     done
+    # Configure the first boot after successful activation, not during build
+    # or a configure-only call. A failed setup leaves the marker for retry.
+    _tarave_configure_boot "$launcher" || return 1
     rm -f -- "$marker" || return 1
 }
 
 function remove_batocera-es-test() {
+    _tarave_remove_managed_desktop_boot || return 1
     # An exclusive installation cannot restore uninstalled frontends.
     # Only remove the launcher if it still belongs to Tarave.
     local entry="/usr/bin/emulationstation"
