@@ -704,17 +704,14 @@ LAUNCHER
     fi
     _tarave_direct_installer || return 1
 
-    # A successful source install selects Tarave automatically, without
-    # replacing the previous ES/ES-X package or touching its private data.
-    # Source installs set the marker in install(); configure-only calls don't.
+    # Source installs exclusively select Tarave, removing registered old
+    # frontend packages after building and configuring Tarave successfully.
     _tarave_activate_after_install /usr/bin/emulationstation "$launcher" \
         "$md_inst/.tarave-activate-after-install" || return 1
 }
 
-# Activating as the default is the normal result of installing Tarave,
-# just as installing ES-X makes it the selected RetroPie frontend.
-# Explicit side-by-side installs remain supported; a later "configure" does
-# not undo a user's decision to restore ES-X or classic EmulationStation.
+# Activation and package cleanup occur only when a successful source
+# installation left a marker. Configure-only calls remain non-destructive.
 function _tarave_activate_after_install() {
     local entry="$1"
     local launcher="$2"
@@ -761,8 +758,13 @@ function _tarave_activate_after_install() {
 }
 
 function remove_batocera-es-test() {
-    # Restore the earlier frontend BEFORE the installed Next files disappear.
-    _batocera_es_test_restore /usr/bin/emulationstation || return 1
+    # An exclusive installation cannot restore uninstalled frontends.
+    # Only remove the launcher if it still belongs to Tarave.
+    local entry="/usr/bin/emulationstation"
+    if _batocera_es_test_owns_entry "$entry"; then
+        rm -f -- "$entry" || return 1
+        echo "Tarave launcher removed. Install another frontend separately if needed."
+    fi
 
     local launcher="/usr/local/bin/batocera-es-test"
     local target="$md_inst/batocera-es-test.sh"
@@ -786,8 +788,7 @@ function remove_batocera-es-test() {
         rm -f -- "$direct_desktop"
     fi
 
-    # Preserve ALL per-user Tarave/ES-X data, themes, input maps, ROMs and
-    # RetroPie system catalogs. Package removal only unlinks installed launchers.
+    # All user ROMs, gamelists, themes, input maps and shared configs remain.
 }
 
 # Optional frontend switch. Existing desktop/tty RetroPie autostart invokes
