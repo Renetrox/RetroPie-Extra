@@ -1,4 +1,4 @@
-name: Test ES-X Next RetroPie installer
+name: Test Tarave exclusive RetroPie installer
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - experiment/batocera-es-standalone-module-20261013
     paths:
       - 'scriptmodules/supplementary/batocera-es-test.sh'
+      - 'scriptmodules/supplementary/emulationstation-es-x.sh'
       - 'tests/test-batocera-es-test-entrypoint.sh'
       - 'tests/test-batocera-es-test-package.sh'
       - 'tests/test-batocera-es-test-install-direct.sh'
@@ -23,11 +24,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Bash syntax
         run: bash -n scriptmodules/supplementary/batocera-es-test.sh
-      - name: Reversible launcher takeover and rollback
+      - name: Exclusive frontend takeover, uninstall and preserved user data
         run: bash tests/test-batocera-es-test-entrypoint.sh
       - name: Working CLI source-installer with actual PTY
         run: bash tests/test-batocera-es-test-install-direct.sh
-      - name: Classic EmulationStation coexistence and system catalog migration
+      - name: Classic EmulationStation system catalog migration
         run: bash tests/test-batocera-es-test-classic-compat.sh
       - name: Installed resources and private default theme
         run: bash tests/test-batocera-es-test-package.sh
