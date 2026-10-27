@@ -69,34 +69,79 @@ _batocera_es_test_activate "$link" "$next"
 _batocera_es_test_restore "$link"
 [[ -L "$link" && "$(readlink "$link")" == "$other" ]]
 [[ "$("$link")" == 'symlink-esx' ]]
-# A source install (marker created by install()) makes Tarave the main
-# frontend by default. Running Configure after the user restores ES does not.
+# The normal source install must retire ALL registered ES/ES-X packages,
+# then re-create the Tarave default launcher. Simulate RetroPie-Setup package
+# removal under a scratch directory: never write to the runner's actual /opt.
+rootdir="$temp/opt/retropie"
+mkdir -p "$rootdir/supplementary"
 fresh="$temp/main-emulationstation"
 marker="$temp/.tarave-activate-after-install"
+config="$temp/user/gamelist.xml"
+mkdir -p "$(dirname "$config")"
+printf '<gameList />\n' > "$config"
+
+rp_hasModule() {
+    case "$1" in
+        emulationstation|emulationstation-es-x|emulationstation-dev) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+rp_isInstalled() { [[ -d "$rootdir/supplementary/$1" ]]; }
+rp_callModule() {
+    [[ "$2" == "remove" ]] || return 1
+    printf '%s\n' "$1" >> "$temp/removed"
+    rmdir -- "$rootdir/supplementary/$1" || return 1
+    # RetroPie's EmulationStation remove hook unlinks its shared entrypoint.
+    rm -f -- "$fresh"
+}
+make_legacy_packages() {
+    mkdir -p "$rootdir/supplementary/emulationstation" \
+             "$rootdir/supplementary/emulationstation-es-x" \
+             "$rootdir/supplementary/emulationstation-dev"
+}
 cat > "$fresh" <<'CLASSIC'
 #!/usr/bin/env bash
 printf 'classic:%s\n' "$*"
 CLASSIC
 chmod +x "$fresh"
+make_legacy_packages
+# Configure-only must NOT remove or replace the existing frontend.
 _tarave_activate_after_install "$fresh" "$next" "$marker"
 [[ "$("$fresh" old)" == 'classic:old' ]]
+[[ -d "$rootdir/supplementary/emulationstation" ]]
+
 touch "$marker"
 _tarave_activate_after_install "$fresh" "$next" "$marker"
 [[ "$("$fresh" new)" == 'next:new' ]]
-[[ "$("$fresh.batocera-es-test.previous" old)" == 'classic:old' ]]
-[[ ! -e "$marker" ]]
-# Reinstallation of an already managed entrypoint is idempotent.
-touch "$marker"
-_tarave_activate_after_install "$fresh" "$next" "$marker"
-[[ "$("$fresh.batocera-es-test.previous" old)" == 'classic:old' ]]
-_batocera_es_test_restore "$fresh"
-[[ "$("$fresh" restored)" == 'classic:restored' ]]
-_tarave_activate_after_install "$fresh" "$next" "$marker"
-[[ "$("$fresh" unchanged)" == 'classic:unchanged' ]]
-# Explicit side-by-side source installation does not take over ES.
-touch "$marker"
-TARAVE_INSTALL_SIDE_BY_SIDE=1 _tarave_activate_after_install "$fresh" "$next" "$marker"
-[[ "$("$fresh" optout)" == 'classic:optout' ]]
-[[ ! -e "$marker" && ! -e "$fresh.batocera-es-test.previous" ]]
+[[ ! -f "$marker" ]]
+[[ ! -e "$fresh.batocera-es-test.previous" ]]
+[[ "$(wc -l < "$temp/removed")" -eq 3 ]]
+for id in emulationstation emulationstation-es-x emulationstation-dev; do
+    [[ ! -d "$rootdir/supplementary/$id" ]]
+    grep -Fqx "$id" "$temp/removed"
+done
+[[ -f "$config" ]] && grep -q '<gameList />' "$config"
 
-echo 'PASS: RetroPie entrypoint backup, quoted arguments and rollback'
+# Reinstalling Tarave remains idempotent and never removes user data.
+touch "$marker"
+_tarave_activate_after_install "$fresh" "$next" "$marker"
+[[ "$("$fresh" old)" == 'next:old' ]]
+[[ ! -f "$marker" ]]
+[[ "$(wc -l < "$temp/removed")" -eq 3 ]]
+[[ -f "$config" ]]
+
+# If ES-X gets installed again, the next Tarave source install takes over.
+make_legacy_packages
+cat > "$fresh" <<'FOREIGN'
+#!/usr/bin/env bash
+echo es-x
+FOREIGN
+chmod +x "$fresh"
+touch "$marker"
+_tarave_activate_after_install "$fresh" "$next" "$marker"
+[[ "$("$fresh")" == 'next:' ]]
+[[ ! -e "$fresh.batocera-es-test.previous" ]]
+[[ "$(wc -l < "$temp/removed")" -eq 6 ]]
+[[ -f "$config" ]]
+
+echo 'PASS: Tarave is the only frontend after install; private settings and ROM data preserved'
