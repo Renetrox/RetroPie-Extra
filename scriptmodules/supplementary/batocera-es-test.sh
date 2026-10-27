@@ -791,40 +791,47 @@ function remove_batocera-es-test() {
     # All user ROMs, gamelists, themes, input maps and shared configs remain.
 }
 
-# Optional frontend switch. Existing desktop/tty RetroPie autostart invokes
-# /usr/bin/emulationstation and will use the selected frontend after switching.
+# Tarave maintenance. An explicit repair can apply exclusive mode to an
+# already installed Tarave without recompiling the frontend.
 function gui_batocera-es-test() {
     local choice
     local launcher="/usr/local/bin/batocera-es-test"
     while true; do
-        choice="$(dialog --backtitle "RetroPie - ES-X Next" \
-            --menu "Select the active frontend (no ROM/config deletion)" 16 72 8 \
-            1 "Activate ES-X Next as default" \
-            2 "Restore previously installed EmulationStation / ES-X" \
-            3 "Keep both; manually test with batocera-es-test --tty-test" \
-            4 "Reimport missing custom systems (Wine, Kodi, etc.)" \
-            5 "Refresh RetroPie Setup icon/descriptions in Tarave" \
-            6 "Copy all previous gamelists (Wine, Kodi, Ports, etc.)" \
-            7 "Download lightweight Batocera Minimal theme (optional)" \
-            8 "Initialize independent RetroPie Setup menu in Tarave" \
+        choice="$(dialog --backtitle "RetroPie - Tarave" \
+            --menu "Tarave management (ROMs and settings are preserved)" 16 72 8 \
+            1 "Activate Tarave and uninstall classic ES / ES-X packages" \
+            2 "Show native TTY test instructions" \
+            3 "Reimport missing custom systems (Wine, Kodi, etc.)" \
+            4 "Refresh RetroPie Setup icons/descriptions" \
+            5 "Import existing gamelists (Wine, Kodi, Ports, etc.)" \
+            6 "Download lightweight Batocera Minimal theme" \
+            7 "Initialize independent RetroPie Setup menu" \
             2>&1 >/dev/tty)" || break
         case "$choice" in
-            1) _batocera_es_test_activate /usr/bin/emulationstation "$launcher" ;;
-            2) _batocera_es_test_restore /usr/bin/emulationstation ;;
-            3) echo "Use batocera-es-test --tty-test from a physical text console."; break ;;
-            4) _tarave_import_missing_systems "$home" || return 1
+            1)
+               if dialog --backtitle "RetroPie - Tarave" --yesno \
+                   "Uninstall classic ES and ES-X program files? Existing ROMs, themes and configurations are kept." 10 72; then
+                   # Tarave's own binary is already installed at this point.
+                   _tarave_remove_competing_frontends || return 1
+                   _batocera_es_test_activate /usr/bin/emulationstation "$launcher" || return 1
+                   local backup="/usr/bin/emulationstation.batocera-es-test.previous"
+                   rm -f -- "$backup" || return 1
+               fi
+               break ;;
+            2) echo "Use batocera-es-test --tty-test from a physical text console."; break ;;
+            3) _tarave_import_missing_systems "$home" || return 1
                echo "Missing system definitions merged into Tarave's private catalog."
                break ;;
-            5) _tarave_sync_retropie_menu "$home" || return 1
+            4) _tarave_sync_retropie_menu "$home" || return 1
                echo "Tarave RetroPie menu refreshed. Restart the frontend to reload the list."
                break ;;
-            6) _tarave_sync_all_gamelists "$home" || return 1
+            5) _tarave_sync_all_gamelists "$home" || return 1
                echo "Previous gamelists imported. Restart Tarave to reload metadata."
                break ;;
-            7) sudo -H -u "$__user" "$launcher" --install-minimal-theme || return 1
+            6) sudo -H -u "$__user" "$launcher" --install-minimal-theme || return 1
                echo "Select theme 'minimal' in Tarave UI Settings > Theme Set."
                break ;;
-            8) _tarave_bootstrap_retropie_menu "$home" || return 1
+            7) _tarave_bootstrap_retropie_menu "$home" || return 1
                echo "Independent RetroPie Setup shortcuts and metadata initialized."
                break ;;
         esac
