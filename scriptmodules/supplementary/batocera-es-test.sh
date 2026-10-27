@@ -2,22 +2,22 @@
 #
 # Tarave standalone frontend module for RetroPie
 #
-# Installs its own executable and private settings, and becomes the default
-# RetroPie EmulationStation frontend after a successful source install.
-# The original ES/ES-X launcher is backed up for a reversible rollback.
-# ROMs, emulators, settings and other frontend packages are never removed.
+# Installs Tarave as RetroPie's sole frontend after a successful source build.
+# Obsolete classic EmulationStation / ES-X executable packages are removed
+# through RetroPie-Setup only after the replacement has been prepared.
+# ROMs, emulator settings, game metadata and user theme folders are preserved.
 #
 # This installs the non-BATOCERA build of the experimental fork.
 # Batocera-specific services, launch hooks, and emulator hotkeys are
 # NOT provided by this package.
 
 rp_module_id="batocera-es-test"
-rp_module_desc="Tarave - independent RetroPie frontend with safe automatic activation"
-rp_module_help="Tarave for RetroPie.\n\nInstalls Tarave as the active RetroPie frontend, whether classic ES or ES-X was active before. The prior launcher is backed up, not uninstalled, and is restored when Tarave is removed.\nSettings, music and themes remain private. Set TARAVE_INSTALL_SIDE_BY_SIDE=1 to install without changing the default.\nThe previous /usr/bin/emulationstation launcher is saved and can be restored using this package's GUI.\n\nStart with: batocera-es-test\nDirect visible installer: tarave-install (from a terminal)\nInstall official Batocera Minimal theme: batocera-es-test --install-minimal-theme\nRefresh all previous gamelists: batocera-es-test --sync-gamelists\nInitialize isolated RetroPie menu: batocera-es-test --initialize-retropie-menu\nRefresh RetroPie Setup icons/metadata: batocera-es-test --sync-retropie-menu\nRe-import missing systems: batocera-es-test --import-legacy-systems\nConsole test: batocera-es-test --tty-test\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
+rp_module_desc="Tarave - sole RetroPie frontend; removes older ES / ES-X binaries"
+rp_module_help="Tarave for RetroPie.\n\nSource installation activates Tarave and uninstalls the original EmulationStation and ES-X program packages. ROMs, emulator configs, input mapping files, themes, gamelists and RetroPie Setup remain intact. If you uninstall Tarave later, reinstall an alternative frontend manually.\n\nLaunch: batocera-es-test\nDirect installer: tarave-install\nPrivate settings: $home/.local/share/batocera-es-test/.emulationstation\nSystems: /opt/retropie/configs/all/emulationstation/es_systems.cfg (if present), otherwise /etc/emulationstation/es_systems.cfg."
 rp_module_licence="MIT https://github.com/Renetrox/batocera-emulationstation/blob/master/LICENSE.md"
 rp_module_repo="git https://github.com/Renetrox/batocera-emulationstation.git experiment/retropie-standalone-20261013"
 rp_module_section="exp"
-rp_module_flags=""
+rp_module_flags="frontend"
 
 function depends_batocera-es-test() {
     getDepends \
