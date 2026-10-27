@@ -427,8 +427,9 @@ function _tarave_configure_boot() {
 }
 
 function _tarave_remove_managed_desktop_boot() {
-    local dest="$home/.config/autostart/tarave.desktop"
-    local lightdm="/etc/lightdm/lightdm.conf.d/90-tarave-autologin.conf"
+    local userhome="${1:-$home}"
+    local dest="$userhome/.config/autostart/tarave.desktop"
+    local lightdm="${2:-/etc/lightdm/lightdm.conf.d/90-tarave-autologin.conf}"
     if [[ -f "$dest" ]] &&
        grep -Fqx '# TARAVE_BOOT_AUTOSTART_MANAGED=1' "$dest"; then
         rm -f -- "$dest" || return 1
