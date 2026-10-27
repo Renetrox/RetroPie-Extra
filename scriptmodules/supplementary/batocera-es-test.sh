@@ -800,7 +800,13 @@ function gui_batocera-es-test() {
                    _tarave_remove_competing_frontends || return 1
                    _batocera_es_test_activate /usr/bin/emulationstation "$launcher" || return 1
                    local backup="/usr/bin/emulationstation.batocera-es-test.previous"
+                   local archived
                    rm -f -- "$backup" || return 1
+                   for archived in "${backup}".archived.*; do
+                       if [[ -f "$archived" || -L "$archived" ]]; then
+                           rm -f -- "$archived" || return 1
+                       fi
+                   done
                fi
                break ;;
             2) echo "Use batocera-es-test --tty-test from a physical text console."; break ;;
