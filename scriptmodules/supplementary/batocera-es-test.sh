@@ -231,6 +231,20 @@ function _batocera_es_test_restore() {
     fi
 }
 
+# Use RetroPie-Setup's own package-removal workflow. This removes only
+# superseded frontend *program packages*, never ROMs, user themes, gamelists,
+# emulator configurations or shared RetroPie system definitions. Call after
+# Tarave has been successfully built and configured, never before.
+function _tarave_remove_competing_frontends() {
+    local id
+    for id in emulationstation-es-x emulationstation-dev emulationstation; do
+        if rp_hasModule "$id" && rp_isInstalled "$id"; then
+            echo "Removing superseded frontend package: $id"
+            rp_callModule "$id" remove || return 1
+        fi
+    done
+}
+
 # RetroPie normally installs a default theme in /etc/emulationstation/themes.
 # That location is shared with ES-X. Instead seed Tarave's private folder only
 # when no theme (downloaded or user-created) is already installed.
