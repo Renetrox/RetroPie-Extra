@@ -41,6 +41,8 @@ echo "RetroPie-Setup: $packages"
 echo "Complete log: $log"
 echo "Tarave becomes the only RetroPie frontend after installation."
 echo "Older ES / ES-X program packages are removed; ROMs and configs are preserved."
+echo "Boot setup: desktop autostart (LightDM auto-login when installed), or RetroPie tty1 autostart."
+echo "Note: GDM/SDDM may still require enabling automatic desktop login."
 # Prompt before starting the tee pipeline so sudo's interactive password
 # exchange and the subsequent source build both use the original terminal.
 sudo -v || exit 1
@@ -48,11 +50,14 @@ sudo -v || exit 1
 # Unlike setup.sh's GUI route, stdout/stderr remain visible throughout CMake.
 # Do not redirect stdin: apt/sudo and terminal programs may require it.
 set +e
-sudo "$packages" batocera-es-test _source_ 2>&1 | tee "$log"
+sudo env TARAVE_BOOT_AUTOSTART="${TARAVE_BOOT_AUTOSTART:-1}" \
+    TARAVE_BOOT_AUTOLOGIN="${TARAVE_BOOT_AUTOLOGIN:-1}" \
+    "$packages" batocera-es-test _source_ 2>&1 | tee "$log"
 result=${PIPESTATUS[0]}
 set -e
 if (( result == 0 )); then
-    echo "Tarave installation complete. Launch with: batocera-es-test"
+    echo "Tarave installation complete. Use sudo reboot to test automatic boot."
+    echo "For a manual test without reboot: batocera-es-test"
 else
     echo "Tarave installation failed with status $result." >&2
     echo "Read the output above or the log: $log" >&2
