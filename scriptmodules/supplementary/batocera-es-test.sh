@@ -21,7 +21,7 @@ rp_module_flags="frontend"
 
 function depends_batocera-es-test() {
     getDepends \
-        git build-essential cmake pkg-config python3 \
+        git build-essential cmake pkg-config python3 curl \
         libsdl2-dev libsdl2-mixer-dev \
         libfreeimage-dev libfreetype6-dev libcurl4-openssl-dev \
         rapidjson-dev libasound2-dev \
@@ -523,6 +523,85 @@ function _tarave_import_previous_system_catalog() {
     fi
 }
 
+# Install a single, reversible Runcommand hook; never replace foreign scripts.
+function _tarave_decoration_hook() {
+    local action="$1"
+    python3 - "$action" "/opt/retropie/configs/all/runcommand-onlaunch.sh" "$md_inst/scripts/retropie-decorations.py" <<'TARAVE_HOOK_PY'
+import os, pathlib, shlex, stat, sys, tempfile
+action, filename, backend = sys.argv[1:]
+path = pathlib.Path(filename)
+begin = b"# BEGIN TARAVE DECORATIONS\n"
+end = b"# END TARAVE DECORATIONS\n"
+if path.is_symlink():
+    sys.exit("Tarave: refusing to modify a symlinked Runcommand hook")
+exists = path.exists()
+if not exists and action == "remove":
+    sys.exit(0)
+if exists and not path.is_file():
+    sys.exit("Tarave: Runcommand hook is not a regular file")
+old = path.read_bytes() if exists else b"#!/bin/bash\n"
+if old.count(begin) != old.count(end) or old.count(begin) > 1:
+    sys.exit("Tarave: malformed managed hook; left unchanged")
+body = old
+if begin in old:
+    start = old.index(begin)
+    stop = old.index(end, start) + len(end)
+    body = old[:start] + old[stop:]
+if action == "install":
+    if not pathlib.Path(backend).is_file():
+        sys.exit("Tarave: decoration backend missing; hook unchanged")
+    # An existing manual integration belongs to the user.
+    if b"retropie-decorations.py" in body:
+        print("Tarave: existing manual decoration hook preserved")
+        sys.exit(0)
+    if body.startswith(b"#!") and b"\n" not in body:
+        body += b"\n"
+    if body.startswith(b"#!"):
+        first, rest = body.split(b"\n", 1)
+        if not any(x in first for x in (b"bash", b"/sh", b"env sh")):
+            sys.exit("Tarave: non-shell Runcommand hook preserved")
+        first += b"\n"
+    else:
+        first, rest = b"", body
+    block = ("if [ -n \"${TARAVE_DECORATION:-}\" ]; then\n"
+             "    python3 " + shlex.quote(backend) + " \"$@\" || :\n"
+             "fi\n").encode()
+    body = first + begin + block + end + rest
+if body == old and exists:
+    sys.exit(0)
+metadata = path.stat() if exists else None
+fd, tmp = tempfile.mkstemp(prefix=".tarave-hook-", dir=str(path.parent))
+try:
+    with os.fdopen(fd, "wb") as out:
+        out.write(body)
+        if metadata:
+            os.fchown(out.fileno(), metadata.st_uid, metadata.st_gid)
+        os.fchmod(out.fileno(), stat.S_IMODE(metadata.st_mode) if metadata else 0o755)
+    os.replace(tmp, path)
+finally:
+    if os.path.exists(tmp):
+        os.unlink(tmp)
+TARAVE_HOOK_PY
+}
+
+function _tarave_configure_decorations() {
+    local user_cfg="$1" ini=""
+    [[ -f "$md_inst/scripts/retropie-decorations.py" ]] || return 1
+    # Create a user-owned default only when no higher-priority ini exists.
+    for candidate in "$md_inst/emulationstation.ini" "$user_cfg/emulationstation.ini" \
+                     "$(dirname "$user_cfg")/emulationstation.ini"; do
+        if [[ -e "$candidate" || -L "$candidate" ]]; then
+            ini="$candidate"
+            break
+        fi
+    done
+    if [[ -z "$ini" ]]; then
+        sudo -H -u "$__user" bash -c 'mkdir -p "$1" && (set -C; printf "decorations=%s\n" "$1" > "$2")' \
+            _ "$home/RetroPie/Overlays" "$user_cfg/emulationstation.ini" || return 1
+    fi
+    _tarave_decoration_hook install
+}
+
 function configure_batocera-es-test() {
     [[ "$md_mode" == "remove" ]] && return 0
 
@@ -545,6 +624,8 @@ function configure_batocera-es-test() {
         chown "$__user:$__group" "$directory" || return 1
     done
     _tarave_seed_default_theme "$user_cfg" || return 1
+    _tarave_configure_decorations "$user_cfg" ||
+        echo "Warning: Tarave decoration integration not configured; existing hook preserved." >&2
 
     # Previous RetroPie config may have Wine/Kodi/Ports and any custom
     # systems. Copy the entire gamelists tree non-destructively; on a clean
@@ -862,6 +943,8 @@ function _tarave_activate_after_install() {
 }
 
 function remove_batocera-es-test() {
+    _tarave_decoration_hook remove ||
+        echo "Warning: Tarave decoration hook could not be removed safely." >&2
     _tarave_remove_managed_desktop_boot || return 1
     # An exclusive installation cannot restore uninstalled frontends.
     # Only remove the launcher if it still belongs to Tarave.
