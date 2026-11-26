@@ -57,7 +57,7 @@ function _update_hook_emulationstation-es-x() {
 # ES-X needs SDL2_mixer headers
 function depends_emulationstation-es-x() {
     depends_emulationstation
-    getDepends libsdl2-mixer-dev rsync
+    getDepends libsdl2-mixer-dev rsync python3 curl
 }
 
 function sources_emulationstation-es-x() {
@@ -490,6 +490,81 @@ function esx_apply_default_settings() {
 # Configure
 # ------------------------------------------------------------
 
+function esx_decoration_hook() {
+    local action="$1"
+    python3 - "$action" "/opt/retropie/configs/all/runcommand-onlaunch.sh" "/opt/retropie/configs/all/esx-retropie-decorations.py" <<'ESX_HOOK_PY'
+import os, pathlib, shlex, stat, sys, tempfile
+action, filename, backend = sys.argv[1:]
+path = pathlib.Path(filename)
+begin = b"# BEGIN ESX DECORATIONS\n"
+end = b"# END ESX DECORATIONS\n"
+if path.is_symlink():
+    sys.exit("ES-X: refusing to modify a symlinked Runcommand hook")
+exists = path.exists()
+if not exists and action == "remove":
+    sys.exit(0)
+if exists and not path.is_file():
+    sys.exit("ES-X: Runcommand hook is not a regular file")
+old = path.read_bytes() if exists else b"#!/bin/bash\n"
+if old.count(begin) != old.count(end) or old.count(begin) > 1:
+    sys.exit("ES-X: malformed managed hook; left unchanged")
+body = old
+if begin in old:
+    start = old.index(begin)
+    stop = old.index(end, start) + len(end)
+    body = old[:start] + old[stop:]
+if action == "install":
+    if not pathlib.Path(backend).is_file():
+        sys.exit("ES-X: decoration backend missing; hook unchanged")
+    # An existing manual integration belongs to the user.
+    # ES-X uses its own environment variables; existing Tarave hooks are independent.
+    if b"ESX_DECORATION" in body:
+        print("ES-X: existing ES-X decoration hook preserved")
+        sys.exit(0)
+    if body.startswith(b"#!") and b"\n" not in body:
+        body += b"\n"
+    if body.startswith(b"#!"):
+        first, rest = body.split(b"\n", 1)
+        if not any(x in first for x in (b"bash", b"/sh", b"env sh")):
+            sys.exit("ES-X: non-shell Runcommand hook preserved")
+        first += b"\n"
+    else:
+        first, rest = b"", body
+    block = ("if [ -n \"${ESX_DECORATION:-}\" ]; then\n"
+             "    python3 " + shlex.quote(backend) + " \"$@\" || :\n"
+             "fi\n").encode()
+    body = first + begin + block + end + rest
+if body == old and exists:
+    sys.exit(0)
+metadata = path.stat() if exists else None
+fd, tmp = tempfile.mkstemp(prefix=".tarave-hook-", dir=str(path.parent))
+try:
+    with os.fdopen(fd, "wb") as out:
+        out.write(body)
+        if metadata:
+            os.fchown(out.fileno(), metadata.st_uid, metadata.st_gid)
+        os.fchmod(out.fileno(), stat.S_IMODE(metadata.st_mode) if metadata else 0o755)
+    os.replace(tmp, path)
+finally:
+    if os.path.exists(tmp):
+        os.unlink(tmp)
+ESX_HOOK_PY
+}
+
+function esx_configure_decorations() {
+    local src="$md_build/scripts/retropie-decorations.py"
+    local dst="/opt/retropie/configs/all/esx-retropie-decorations.py"
+    if [[ -f "$src" ]]; then
+        install -m 755 -- "$src" "$dst" || return 1
+    elif [[ ! -f "$dst" ]]; then
+        echo "ES-X: source backend unavailable; run source installation first." >&2
+        return 1
+    fi
+    [[ -f "$dst" ]] || return 1
+    mkUserDir "$home/RetroPie/Overlays"
+    esx_decoration_hook install
+}
+
 function configure_emulationstation-es-x() {
     echo "Configuring EmulationStation-X..."
 
@@ -504,6 +579,7 @@ function configure_emulationstation-es-x() {
     esx_install_skyscraper_config
     esx_install_theme_previews
     esx_install_xtras_catalog
+    esx_configure_decorations || echo "WARNING: decoration backend not configured; existing hook preserved." >&2
     esx_create_music_dirs
     esx_install_default_themes
     esx_apply_default_settings
@@ -516,6 +592,7 @@ function configure_emulationstation-es-x() {
 # ------------------------------------------------------------
 
 function remove_emulationstation-es-x() {
+    esx_decoration_hook remove || echo "WARNING: decoration hook not removed." >&2
     remove_emulationstation
 }
 
